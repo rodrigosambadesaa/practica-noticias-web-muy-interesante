@@ -6,6 +6,7 @@
  * extensible probe strategies, and captive-portal-aware reachability checks.
  */
 package com.example.muyinteresante.util;
+
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -20,6 +21,7 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -51,26 +53,33 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
+
 @SuppressWarnings("deprecation")
 public final class ConnectivityAndInternetAccess {
+
     public interface DnsProbeStrategy {
         boolean checkDns(String resolver, Network network);
     }
+
     public interface HttpProbeStrategy {
         boolean checkHttp(String url, Network network);
     }
+
     public interface InternetCallback {
         void onResult(InternetResult result);
     }
+
     public static final class InternetResult {
         private final boolean reachable;
         private final String reachedHost;
         private final List<String> attemptedHosts;
         private final long elapsedMilliseconds;
+
         private InternetResult(
                 boolean reachable,
                 String reachedHost,
@@ -81,15 +90,19 @@ public final class ConnectivityAndInternetAccess {
             this.attemptedHosts = Collections.unmodifiableList(new ArrayList<>(attemptedHosts));
             this.elapsedMilliseconds = elapsedMilliseconds;
         }
+
         public boolean isReachable() { return reachable; }
         public String getReachedHost() { return reachedHost; }
         public List<String> getAttemptedHosts() { return attemptedHosts; }
         public long getElapsedMilliseconds() { return elapsedMilliseconds; }
     }
+
     public static final class Request {
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
         private volatile Future<?> future;
+
         private Request() {}
+
         public void cancel() {
             cancelled.set(true);
             Future<?> task = future;
@@ -97,9 +110,11 @@ public final class ConnectivityAndInternetAccess {
                 task.cancel(true);
             }
         }
+
         public boolean isCancelled() {
             return cancelled.get();
         }
+
         private void attach(Future<?> task) {
             future = task;
             if (cancelled.get()) {
@@ -107,10 +122,12 @@ public final class ConnectivityAndInternetAccess {
             }
         }
     }
+
     /** Receives passive changes to the application's default-network state. */
     public interface NetworkStateCallback {
         void onStateChanged(NetworkState state);
     }
+
     /**
      * Cheap, passive snapshot of the application's default network.
      *
@@ -122,6 +139,7 @@ public final class ConnectivityAndInternetAccess {
         private final boolean internetValidated;
         private final boolean captivePortalDetected;
         private final long observedAtElapsedRealtime;
+
         private NetworkState(
                 boolean connected,
                 boolean internetValidated,
@@ -132,16 +150,19 @@ public final class ConnectivityAndInternetAccess {
             this.captivePortalDetected = captivePortalDetected;
             this.observedAtElapsedRealtime = observedAtElapsedRealtime;
         }
+
         public boolean isConnected() { return connected; }
         public boolean isInternetValidated() { return internetValidated; }
         public boolean isCaptivePortalDetected() { return captivePortalDetected; }
         public long getObservedAtElapsedRealtime() { return observedAtElapsedRealtime; }
+
         private boolean sameConnectivityState(NetworkState other) {
             return other != null
                     && connected == other.connected
                     && internetValidated == other.internetValidated
                     && captivePortalDetected == other.captivePortalDetected;
         }
+
         @Override
         public String toString() {
             return "NetworkState{"
@@ -151,6 +172,7 @@ public final class ConnectivityAndInternetAccess {
                     + '}';
         }
     }
+
     /**
      * Lifecycle-friendly passive observer. API 24+ uses the application's default
      * {@link ConnectivityManager.NetworkCallback}. API 16-23 uses a dynamically
@@ -168,6 +190,7 @@ public final class ConnectivityAndInternetAccess {
         private volatile NetworkState latestState;
         private ConnectivityManager.NetworkCallback networkCallback;
         private BroadcastReceiver legacyReceiver;
+
         private NetworkObserver(Context context, NetworkStateCallback callback) {
             requireContext(context);
             if (callback == null) {
@@ -178,17 +201,21 @@ public final class ConnectivityAndInternetAccess {
             this.connectivityManager = manager(this.applicationContext);
             this.callback = callback;
             this.latestState = snapshotNetworkState(this.applicationContext);
+
             // Deliver a useful initial value immediately through the same main-thread path.
             deliver(this.latestState);
             register();
         }
+
         public NetworkState getLatestState() {
             return latestState;
         }
+
         private void register() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 networkCallback = new ConnectivityManager.NetworkCallback() {
                     private volatile Network currentDefaultNetwork;
+
                     @Override
                     public void onAvailable(Network network) {
                         // Do not synchronously query NetworkCapabilities here. Android's
@@ -196,6 +223,7 @@ public final class ConnectivityAndInternetAccess {
                         // onCapabilitiesChanged().
                         currentDefaultNetwork = network;
                     }
+
                     @Override
                     public void onCapabilitiesChanged(
                             Network network,
@@ -203,6 +231,7 @@ public final class ConnectivityAndInternetAccess {
                         currentDefaultNetwork = network;
                         publish(networkStateFromCapabilities(capabilities));
                     }
+
                     @Override
                     public void onLost(Network network) {
                         if (network.equals(currentDefaultNetwork)) {
@@ -214,6 +243,7 @@ public final class ConnectivityAndInternetAccess {
                 connectivityManager.registerDefaultNetworkCallback(networkCallback);
                 return;
             }
+
             legacyReceiver = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context ignoredContext, Intent ignoredIntent) {
@@ -224,6 +254,7 @@ public final class ConnectivityAndInternetAccess {
                     legacyReceiver,
                     new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
         }
+
         private void publish(NetworkState state) {
             if (closed.get()) {
                 return;
@@ -234,6 +265,7 @@ public final class ConnectivityAndInternetAccess {
                 deliver(state);
             }
         }
+
         private void deliver(NetworkState state) {
             MAIN_HANDLER.post(() -> {
                 if (!closed.get()) {
@@ -241,11 +273,13 @@ public final class ConnectivityAndInternetAccess {
                 }
             });
         }
+
         @Override
         public void close() {
             if (!closed.compareAndSet(false, true)) {
                 return;
             }
+
             if (networkCallback != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 try {
                     connectivityManager.unregisterNetworkCallback(networkCallback);
@@ -254,6 +288,7 @@ public final class ConnectivityAndInternetAccess {
                 }
                 networkCallback = null;
             }
+
             if (legacyReceiver != null) {
                 try {
                     applicationContext.unregisterReceiver(legacyReceiver);
@@ -264,6 +299,7 @@ public final class ConnectivityAndInternetAccess {
             }
         }
     }
+
     private static final int MINIMUM_FAST_KBPS = 3_072;
     private static final int CONNECT_TIMEOUT_MS = 800;
     private static final int READ_TIMEOUT_MS = 800;
@@ -275,12 +311,14 @@ public final class ConnectivityAndInternetAccess {
     private static final int DNS_PORT = 53;
     private static final long CONNECTION_ATTEMPT_TIMEOUT_MS = 30_000L;
     private static final String DNS_QUERY_NAME = "example.com";
+
     private static final List<String> DEFAULT_DNS_RESOLVERS = Collections.unmodifiableList(Arrays.asList(
             "1.1.1.1",
             "8.8.8.8",
             "9.9.9.9",
             "208.67.222.222"
     ));
+
     private static final List<String> DEFAULT_HOSTS = Collections.unmodifiableList(Arrays.asList(
             "https://www.google.com/generate_204",
             "https://www.facebook.com/",
@@ -288,19 +326,24 @@ public final class ConnectivityAndInternetAccess {
             "https://www.apple.com/",
             "https://www.amazon.com/"
     ));
+
     private static volatile List<String> globalHosts = DEFAULT_HOSTS;
     private static volatile List<String> globalResolvers = DEFAULT_DNS_RESOLVERS;
     private static volatile DnsProbeStrategy globalDnsStrategy = new DefaultDnsProbe();
     private static volatile HttpProbeStrategy globalHttpStrategy = new DefaultHttpProbe();
+
     private static final Object CONNECTION_ATTEMPT_LOCK = new Object();
     private static final Deque<ConnectionAttempt> CONNECTION_ATTEMPT_QUEUE = new ArrayDeque<>();
     private static final AtomicInteger CONNECTION_ATTEMPTS = new AtomicInteger(0);
     private static final AtomicInteger DNS_TRANSACTION_ID = new AtomicInteger((int) System.nanoTime());
     private static final AtomicInteger PROBE_THREAD_NUMBER = new AtomicInteger(0);
+
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static final SSLSocketFactory TLS_12_SOCKET_FACTORY = createTls12Factory();
+
     private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool(new ThreadFactory() {
         private int number;
+
         @Override
         public synchronized Thread newThread(Runnable runnable) {
             Thread thread = new Thread(runnable, "connectivity-check-" + (++number));
@@ -308,10 +351,12 @@ public final class ConnectivityAndInternetAccess {
             return thread;
         }
     });
+
     private final List<String> instanceHosts;
     private final List<String> instanceResolvers;
     private final DnsProbeStrategy instanceDnsStrategy;
     private final HttpProbeStrategy instanceHttpStrategy;
+
     /**
      * Legacy constructor retained for compatibility. It also updates the global host list,
      * matching the historical mutable-global behavior. New code should prefer Builder.
@@ -323,6 +368,7 @@ public final class ConnectivityAndInternetAccess {
         this.instanceHttpStrategy = new DefaultHttpProbe();
         globalHosts = this.instanceHosts;
     }
+
     private ConnectivityAndInternetAccess(Builder builder) {
         this.instanceHosts = normalizeHosts(builder.hosts);
         this.instanceResolvers = normalizeDnsResolvers(builder.dnsResolvers);
@@ -333,31 +379,38 @@ public final class ConnectivityAndInternetAccess {
                 ? builder.httpStrategy
                 : new DefaultHttpProbe();
     }
+
     public static final class Builder {
         private List<String> hosts = DEFAULT_HOSTS;
         private List<String> dnsResolvers = DEFAULT_DNS_RESOLVERS;
         private DnsProbeStrategy dnsStrategy;
         private HttpProbeStrategy httpStrategy;
+
         public Builder setHosts(List<String> hosts) {
             this.hosts = hosts;
             return this;
         }
+
         public Builder setDnsResolvers(List<String> resolvers) {
             this.dnsResolvers = resolvers;
             return this;
         }
+
         public Builder setDnsProbeStrategy(DnsProbeStrategy strategy) {
             this.dnsStrategy = strategy;
             return this;
         }
+
         public Builder setHttpProbeStrategy(HttpProbeStrategy strategy) {
             this.httpStrategy = strategy;
             return this;
         }
+
         public ConnectivityAndInternetAccess build() {
             return new ConnectivityAndInternetAccess(this);
         }
     }
+
     public static Builder strictCaptivePortalBuilder() {
         return new Builder()
                 .setDnsResolvers(Collections.emptyList())
@@ -365,7 +418,9 @@ public final class ConnectivityAndInternetAccess {
                         "https://connectivitycheck.gstatic.com/generate_204"))
                 .setHttpProbeStrategy(new StrictHttpProbe());
     }
+
     // Instance API: preferred for new code.
+
     public Request checkInternetAsync(Context context, InternetCallback callback) {
         return executeAsync(
                 context,
@@ -375,6 +430,7 @@ public final class ConnectivityAndInternetAccess {
                 instanceHttpStrategy,
                 callback);
     }
+
     public InternetResult checkInternetBlocking(Context context) {
         return executeBlocking(
                 context,
@@ -383,10 +439,13 @@ public final class ConnectivityAndInternetAccess {
                 instanceDnsStrategy,
                 instanceHttpStrategy);
     }
+
     // Connectivity API.
+
     public static boolean isActiveNetworkConnected(Context context) {
         return isConnected(context);
     }
+
     public static boolean isConnected(Context context, Network network) {
         requireContext(context);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
@@ -397,11 +456,14 @@ public final class ConnectivityAndInternetAccess {
         }
         return isUsable(manager(context).getNetworkCapabilities(network));
     }
+
     public static boolean isConnecting(Context context) {
         requireContext(context);
+
         if (isConnected(context)) {
             return false;
         }
+
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
             for (NetworkInfo info : legacyNetworks(manager(context))) {
                 if (info != null
@@ -411,19 +473,24 @@ public final class ConnectivityAndInternetAccess {
                 }
             }
         }
+
         return CONNECTION_ATTEMPTS.get() > 0;
     }
+
     public static void beginConnectionAttempt(Context context) {
         requireContext(context);
         final ConnectionAttempt attempt = new ConnectionAttempt();
+
         synchronized (CONNECTION_ATTEMPT_LOCK) {
             CONNECTION_ATTEMPT_QUEUE.addLast(attempt);
             CONNECTION_ATTEMPTS.incrementAndGet();
         }
+
         MAIN_HANDLER.postDelayed(
                 () -> closeConnectionAttempt(attempt),
                 CONNECTION_ATTEMPT_TIMEOUT_MS);
     }
+
     public static void endConnectionAttempt() {
         synchronized (CONNECTION_ATTEMPT_LOCK) {
             while (!CONNECTION_ATTEMPT_QUEUE.isEmpty()) {
@@ -436,11 +503,14 @@ public final class ConnectivityAndInternetAccess {
             }
         }
     }
+
     public static boolean isConnectedOrConnecting(Context context) {
         requireContext(context);
+
         if (isConnected(context)) {
             return true;
         }
+
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
             for (NetworkInfo info : legacyNetworks(manager(context))) {
                 if (info != null
@@ -450,11 +520,14 @@ public final class ConnectivityAndInternetAccess {
                 }
             }
         }
+
         return CONNECTION_ATTEMPTS.get() > 0;
     }
+
     public static boolean isConnected(Context context) {
         requireContext(context);
         ConnectivityManager connectivityManager = manager(context);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Network active = connectivityManager.getActiveNetwork();
             if (active != null
@@ -464,6 +537,7 @@ public final class ConnectivityAndInternetAccess {
             }
             return false;
         }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             for (Network network : connectivityManager.getAllNetworks()) {
                 if (isUsable(connectivityManager.getNetworkCapabilities(network))) {
@@ -473,16 +547,19 @@ public final class ConnectivityAndInternetAccess {
             }
             return false;
         }
+
         boolean connected = isConnectedLegacy(connectivityManager.getActiveNetworkInfo());
         if (connected) {
             clearConnectionAttempts();
         }
         return connected;
     }
+
     /** Returns a cheap point-in-time snapshot of the application's default network. */
     public static NetworkState snapshotNetworkState(Context context) {
         requireContext(context);
         ConnectivityManager connectivityManager = manager(context);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Network active = connectivityManager.getActiveNetwork();
             if (active == null) {
@@ -491,6 +568,7 @@ public final class ConnectivityAndInternetAccess {
             return networkStateFromCapabilities(
                     connectivityManager.getNetworkCapabilities(active));
         }
+
         // Before API 23 there is no default-Network object and no VALIDATED or
         // CAPTIVE_PORTAL capability. activeNetworkInfo represents the legacy default.
         boolean connected = isConnectedLegacy(connectivityManager.getActiveNetworkInfo());
@@ -500,6 +578,7 @@ public final class ConnectivityAndInternetAccess {
                 false,
                 SystemClock.elapsedRealtime());
     }
+
     /**
      * Starts passive observation of the application's default network and immediately
      * delivers the current state on the main thread. Close the returned observer when
@@ -510,6 +589,7 @@ public final class ConnectivityAndInternetAccess {
             NetworkStateCallback callback) {
         return new NetworkObserver(context, callback);
     }
+
     /**
      * Returns whether Android most recently validated general Internet access on the
      * application's current default network. This is a system snapshot, not a fresh
@@ -520,10 +600,12 @@ public final class ConnectivityAndInternetAccess {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return false;
         }
+
         ConnectivityManager connectivityManager = manager(context);
         Network active = connectivityManager.getActiveNetwork();
         return active != null && isInternetValidated(context, active);
     }
+
     /**
      * Network-specific variant of {@link #isInternetValidated(Context)}.
      */
@@ -532,12 +614,14 @@ public final class ConnectivityAndInternetAccess {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || network == null) {
             return false;
         }
+
         NetworkCapabilities capabilities =
                 manager(context).getNetworkCapabilities(network);
         return capabilities != null
                 && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
     }
+
     /**
      * Returns whether Android detected a captive portal on the application's current
      * default network the last time that network was probed. API levels below 23 do not
@@ -548,10 +632,12 @@ public final class ConnectivityAndInternetAccess {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return false;
         }
+
         ConnectivityManager connectivityManager = manager(context);
         Network active = connectivityManager.getActiveNetwork();
         return active != null && isCaptivePortalDetected(context, active);
     }
+
     /**
      * Network-specific variant of {@link #isCaptivePortalDetected(Context)}.
      */
@@ -560,29 +646,36 @@ public final class ConnectivityAndInternetAccess {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || network == null) {
             return false;
         }
+
         NetworkCapabilities capabilities =
                 manager(context).getNetworkCapabilities(network);
         return capabilities != null
                 && capabilities.hasCapability(
                         NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL);
     }
+
     public static boolean isConnectedWifi(Context context) {
         return hasTransport(context, NetworkCapabilities.TRANSPORT_WIFI);
     }
+
     public static boolean isConnectedWifi(Context context, Network network) {
         return hasTransport(context, network, NetworkCapabilities.TRANSPORT_WIFI);
     }
+
     public static boolean isConnectedWifiOverAirplaneMode(Context context) {
         return isAirplaneModeOn(context) && isConnectedWifi(context);
     }
+
     public static boolean isConnectedWifiOverAirplaneMode(Context context, Network network) {
         return isAirplaneModeOn(context) && isConnectedWifi(context, network);
     }
+
     public static boolean isConnectedMobileTelephonyManager(Context context) {
         requireContext(context);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             return isConnectedMobile(context);
         }
+
         try {
             TelephonyManager telephonyManager =
                     (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
@@ -592,21 +685,27 @@ public final class ConnectivityAndInternetAccess {
             return isConnectedMobile(context);
         }
     }
+
     public static boolean isConnectedMobile(Context context, Network network) {
         return hasTransport(context, network, NetworkCapabilities.TRANSPORT_CELLULAR);
     }
+
     public static boolean isConnectedMobile(Context context) {
         return hasTransport(context, NetworkCapabilities.TRANSPORT_CELLULAR);
     }
+
     public static boolean isConnectedEthernet(Context context) {
         return hasTransport(context, NetworkCapabilities.TRANSPORT_ETHERNET);
     }
+
     public static boolean isConnectedEthernet(Context context, Network network) {
         return hasTransport(context, network, NetworkCapabilities.TRANSPORT_ETHERNET);
     }
+
     public static boolean isConnectedFast(Context context) {
         requireContext(context);
         ConnectivityManager connectivityManager = manager(context);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             for (Network network : connectivityManager.getAllNetworks()) {
                 if (isFast(connectivityManager.getNetworkCapabilities(network))) {
@@ -615,6 +714,7 @@ public final class ConnectivityAndInternetAccess {
             }
             return false;
         }
+
         for (NetworkInfo info : legacyNetworks(connectivityManager)) {
             if (isConnectedLegacy(info)
                     && isConnectionFast(info.getType(), info.getSubtype())) {
@@ -623,18 +723,23 @@ public final class ConnectivityAndInternetAccess {
         }
         return false;
     }
+
     public static boolean isConnectedFast(Context context, Network network) {
         requireContext(context);
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
             NetworkInfo info = manager(context).getActiveNetworkInfo();
             return isConnectedLegacy(info)
                     && isConnectionFast(info.getType(), info.getSubtype());
         }
+
         if (network == null) {
             return false;
         }
+
         return isFast(manager(context).getNetworkCapabilities(network));
     }
+
     public static boolean isAirplaneModeOn(Context context) {
         requireContext(context);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR1) {
@@ -643,16 +748,19 @@ public final class ConnectivityAndInternetAccess {
                     Settings.System.AIRPLANE_MODE_ON,
                     0) != 0;
         }
+
         return Settings.Global.getInt(
                 context.getContentResolver(),
                 Settings.Global.AIRPLANE_MODE_ON,
                 0) != 0;
     }
+
     public static boolean vpnActive(Context context) {
         requireContext(context);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
             return false;
         }
+
         ConnectivityManager connectivityManager = manager(context);
         for (Network network : connectivityManager.getAllNetworks()) {
             NetworkCapabilities capabilities =
@@ -664,8 +772,10 @@ public final class ConnectivityAndInternetAccess {
         }
         return false;
     }
+
     // Static compatibility helpers. Names differ from the instance methods so
     // Java and Kotlin/JVM do not generate duplicate method signatures.
+
     public static boolean isInternetReachable(Context context) {
         return executeBlocking(
                 context,
@@ -674,6 +784,7 @@ public final class ConnectivityAndInternetAccess {
                 globalDnsStrategy,
                 globalHttpStrategy).isReachable();
     }
+
     public static boolean isInternetReachable(Context context, ArrayList<String> hosts) {
         return executeBlocking(
                 context,
@@ -682,6 +793,7 @@ public final class ConnectivityAndInternetAccess {
                 globalDnsStrategy,
                 globalHttpStrategy).isReachable();
     }
+
     public static Request checkInternetAsyncDefault(
             Context context,
             InternetCallback callback) {
@@ -693,6 +805,7 @@ public final class ConnectivityAndInternetAccess {
                 globalHttpStrategy,
                 callback);
     }
+
     public static Request checkInternetAsyncDefault(
             Context context,
             List<String> hosts,
@@ -705,6 +818,7 @@ public final class ConnectivityAndInternetAccess {
                 globalHttpStrategy,
                 callback);
     }
+
     public static Request checkInternetAsyncDefault(
             Context context,
             List<String> dnsResolvers,
@@ -718,6 +832,7 @@ public final class ConnectivityAndInternetAccess {
                 globalHttpStrategy,
                 callback);
     }
+
     public static InternetResult checkInternetBlockingDefault(Context context) {
         return executeBlocking(
                 context,
@@ -726,6 +841,7 @@ public final class ConnectivityAndInternetAccess {
                 globalDnsStrategy,
                 globalHttpStrategy);
     }
+
     public static InternetResult checkInternetBlockingDefault(
             Context context,
             List<String> hosts) {
@@ -736,6 +852,7 @@ public final class ConnectivityAndInternetAccess {
                 globalDnsStrategy,
                 globalHttpStrategy);
     }
+
     public static InternetResult checkInternetBlockingDefault(
             Context context,
             List<String> dnsResolvers,
@@ -747,12 +864,15 @@ public final class ConnectivityAndInternetAccess {
                 globalDnsStrategy,
                 globalHttpStrategy);
     }
+
     public static List<String> defaultHosts() {
         return DEFAULT_HOSTS;
     }
+
     public static List<String> defaultDnsResolvers() {
         return DEFAULT_DNS_RESOLVERS;
     }
+
     private static Request executeAsync(
             Context context,
             List<String> dnsResolvers,
@@ -764,6 +884,7 @@ public final class ConnectivityAndInternetAccess {
         if (callback == null) {
             throw new IllegalArgumentException("callback == null");
         }
+
         Context applicationContext = context.getApplicationContext();
         final Context appContext = applicationContext != null ? applicationContext : context;
         final List<String> normalizedResolvers = normalizeDnsResolvers(dnsResolvers);
@@ -773,6 +894,7 @@ public final class ConnectivityAndInternetAccess {
         final HttpProbeStrategy effectiveHttpStrategy =
                 httpStrategy != null ? httpStrategy : new DefaultHttpProbe();
         final Request request = new Request();
+
         Future<?> future = EXECUTOR.submit(() -> {
             InternetResult result = executeBlocking(
                     appContext,
@@ -780,6 +902,7 @@ public final class ConnectivityAndInternetAccess {
                     normalizedHosts,
                     effectiveDnsStrategy,
                     effectiveHttpStrategy);
+
             if (!request.isCancelled()) {
                 MAIN_HANDLER.post(() -> {
                     if (!request.isCancelled()) {
@@ -788,9 +911,11 @@ public final class ConnectivityAndInternetAccess {
                 });
             }
         });
+
         request.attach(future);
         return request;
     }
+
     private static InternetResult executeBlocking(
             Context context,
             List<String> dnsResolvers,
@@ -798,11 +923,13 @@ public final class ConnectivityAndInternetAccess {
             DnsProbeStrategy dnsStrategy,
             HttpProbeStrategy httpStrategy) {
         requireContext(context);
+
         long started = SystemClock.elapsedRealtime();
         long deadline = started + TOTAL_PROBE_TIMEOUT_MS;
         List<String> attempted = new CopyOnWriteArrayList<>();
         ConnectivityManager connectivityManager = manager(context);
         Network network = selectProbeNetwork(connectivityManager);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             if (network == null) {
                 return new InternetResult(
@@ -818,10 +945,12 @@ public final class ConnectivityAndInternetAccess {
                     attempted,
                     SystemClock.elapsedRealtime() - started);
         }
+
         ExecutorService probeExecutor = newProbeExecutor();
         try {
             List<String> normalizedResolvers = normalizeDnsResolvers(dnsResolvers);
             String reached = null;
+
             /*
              * Prefer the DNS configuration of the selected Android Network before
              * contacting public resolvers directly. This respects the effective
@@ -838,11 +967,13 @@ public final class ConnectivityAndInternetAccess {
                         Collections.singletonList(new ProbeAttempt(
                                 effectiveDnsLabel(),
                                 () -> checkEffectiveDns(network)));
+
                 reached = raceProbes(
                         effectiveDnsAttempts,
                         attempted,
                         Math.min(deadline, started + EFFECTIVE_DNS_STAGE_TIMEOUT_MS),
                         probeExecutor);
+
                 if (reached != null) {
                     return new InternetResult(
                             true,
@@ -851,17 +982,20 @@ public final class ConnectivityAndInternetAccess {
                             SystemClock.elapsedRealtime() - started);
                 }
             }
+
             List<ProbeAttempt> dnsAttempts = new ArrayList<>();
             for (String resolver : normalizedResolvers) {
                 dnsAttempts.add(new ProbeAttempt(
                         dnsEndpointLabel(resolver),
                         () -> dnsStrategy.checkDns(resolver, network)));
             }
+
             reached = raceProbes(
                     dnsAttempts,
                     attempted,
                     Math.min(deadline, started + DNS_STAGE_TIMEOUT_MS),
                     probeExecutor);
+
             if (reached != null) {
                 return new InternetResult(
                         true,
@@ -869,17 +1003,20 @@ public final class ConnectivityAndInternetAccess {
                         attempted,
                         SystemClock.elapsedRealtime() - started);
             }
+
             List<ProbeAttempt> hostAttempts = new ArrayList<>();
             for (String host : normalizeHosts(hosts)) {
                 hostAttempts.add(new ProbeAttempt(
                         host,
                         () -> httpStrategy.checkHttp(host, network)));
             }
+
             reached = raceProbes(
                     hostAttempts,
                     attempted,
                     deadline,
                     probeExecutor);
+
             if (reached != null) {
                 return new InternetResult(
                         true,
@@ -887,6 +1024,7 @@ public final class ConnectivityAndInternetAccess {
                         attempted,
                         SystemClock.elapsedRealtime() - started);
             }
+
             return new InternetResult(
                     false,
                     null,
@@ -896,6 +1034,7 @@ public final class ConnectivityAndInternetAccess {
             probeExecutor.shutdownNow();
         }
     }
+
     private static String raceProbes(
             List<ProbeAttempt> probes,
             List<String> attempted,
@@ -904,9 +1043,11 @@ public final class ConnectivityAndInternetAccess {
         if (probes.isEmpty() || Thread.currentThread().isInterrupted()) {
             return null;
         }
+
         CompletionService<String> completion =
                 new ExecutorCompletionService<>(probeExecutor);
         List<Future<String>> futures = new ArrayList<>();
+
         for (ProbeAttempt probe : probes) {
             futures.add(completion.submit(() -> {
                 attempted.add(probe.label);
@@ -916,6 +1057,7 @@ public final class ConnectivityAndInternetAccess {
                 return probe.operation.run() ? probe.label : null;
             }));
         }
+
         int remaining = futures.size();
         try {
             while (remaining-- > 0) {
@@ -923,10 +1065,12 @@ public final class ConnectivityAndInternetAccess {
                 if (wait <= 0) {
                     return null;
                 }
+
                 Future<String> completed = completion.poll(wait, TimeUnit.MILLISECONDS);
                 if (completed == null) {
                     return null;
                 }
+
                 try {
                     String reached = completed.get();
                     if (reached != null) {
@@ -943,8 +1087,10 @@ public final class ConnectivityAndInternetAccess {
                 future.cancel(true);
             }
         }
+
         return null;
     }
+
     private static boolean checkEffectiveDns(Network network) {
         try {
             InetAddress[] addresses;
@@ -959,28 +1105,35 @@ public final class ConnectivityAndInternetAccess {
             return false;
         }
     }
+
     private static String effectiveDnsLabel() {
         return "dns://system/" + DNS_QUERY_NAME;
     }
+
     public static final class DefaultDnsProbe implements DnsProbeStrategy {
         @Override
         public boolean checkDns(String resolver, Network network) {
             DnsResolver endpoint = parseDnsResolver(resolver);
             DatagramSocket socket = null;
+
             try {
                 int transactionId = DNS_TRANSACTION_ID.incrementAndGet() & 0xffff;
                 byte[] query = createDnsQuery(transactionId);
+
                 socket = new DatagramSocket();
                 if (network != null
                         && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
                     network.bindSocket(socket);
                 }
+
                 socket.setSoTimeout(DNS_TIMEOUT_MS);
                 socket.connect(new InetSocketAddress(endpoint.host, endpoint.port));
                 socket.send(new DatagramPacket(query, query.length));
+
                 byte[] buffer = new byte[512];
                 DatagramPacket response = new DatagramPacket(buffer, buffer.length);
                 socket.receive(response);
+
                 return isValidDnsResponse(
                         transactionId,
                         response.getData(),
@@ -993,17 +1146,20 @@ public final class ConnectivityAndInternetAccess {
                 }
             }
         }
+
         private byte[] createDnsQuery(int transactionId) {
             String[] labels = DNS_QUERY_NAME.split("\\.");
             int length = 12 + 1 + 4;
             for (String label : labels) {
                 length += 1 + label.length();
             }
+
             byte[] query = new byte[length];
             query[0] = (byte) (transactionId >>> 8);
             query[1] = (byte) transactionId;
             query[2] = 0x01;
             query[5] = 0x01;
+
             int offset = 12;
             for (String label : labels) {
                 query[offset++] = (byte) label.length();
@@ -1011,6 +1167,7 @@ public final class ConnectivityAndInternetAccess {
                     query[offset++] = (byte) label.charAt(i);
                 }
             }
+
             query[offset++] = 0x00;
             query[offset++] = 0x00;
             query[offset++] = 0x01;
@@ -1018,6 +1175,7 @@ public final class ConnectivityAndInternetAccess {
             query[offset] = 0x01;
             return query;
         }
+
         private boolean isValidDnsResponse(
                 int transactionId,
                 byte[] response,
@@ -1025,10 +1183,12 @@ public final class ConnectivityAndInternetAccess {
             if (response == null || length < 12) {
                 return false;
             }
+
             int responseId = ((response[0] & 0xff) << 8) | (response[1] & 0xff);
             int flags = ((response[2] & 0xff) << 8) | (response[3] & 0xff);
             int questionCount = ((response[4] & 0xff) << 8) | (response[5] & 0xff);
             int responseCode = flags & 0x000f;
+
             return responseId == transactionId
                     && (flags & 0x8000) != 0
                     && (flags & 0x7800) == 0
@@ -1036,18 +1196,22 @@ public final class ConnectivityAndInternetAccess {
                     && responseCode <= 5;
         }
     }
+
     public static final class DefaultHttpProbe implements HttpProbeStrategy {
         @Override
         public boolean checkHttp(String address, Network network) {
             HttpURLConnection connection = null;
+
             try {
                 URL url = new URL(address);
                 URLConnection raw = network != null
                         && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
                         ? network.openConnection(url)
                         : url.openConnection();
+
                 connection = (HttpURLConnection) raw;
                 configureTlsIfNecessary(connection);
+
                 connection.setRequestMethod("GET");
                 connection.setInstanceFollowRedirects(false);
                 connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
@@ -1059,6 +1223,7 @@ public final class ConnectivityAndInternetAccess {
                 connection.setRequestProperty(
                         "User-Agent",
                         "ConnectivityAndInternetAccess/5");
+
                 int response = connection.getResponseCode();
                 return response >= 100 && response <= 599;
             } catch (IOException | RuntimeException ignored) {
@@ -1070,18 +1235,22 @@ public final class ConnectivityAndInternetAccess {
             }
         }
     }
+
     public static final class StrictHttpProbe implements HttpProbeStrategy {
         @Override
         public boolean checkHttp(String address, Network network) {
             HttpURLConnection connection = null;
+
             try {
                 URL url = new URL(address);
                 URLConnection raw = network != null
                         && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
                         ? network.openConnection(url)
                         : url.openConnection();
+
                 connection = (HttpURLConnection) raw;
                 configureTlsIfNecessary(connection);
+
                 connection.setRequestMethod("GET");
                 connection.setInstanceFollowRedirects(false);
                 connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
@@ -1093,6 +1262,7 @@ public final class ConnectivityAndInternetAccess {
                 connection.setRequestProperty(
                         "User-Agent",
                         "ConnectivityAndInternetAccess/5");
+
                 int response = connection.getResponseCode();
                 if (address.contains("generate_204")) {
                     return response == HttpURLConnection.HTTP_NO_CONTENT;
@@ -1108,6 +1278,7 @@ public final class ConnectivityAndInternetAccess {
             }
         }
     }
+
     private static void configureTlsIfNecessary(HttpURLConnection connection) {
         if (connection instanceof HttpsURLConnection
                 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN
@@ -1116,6 +1287,7 @@ public final class ConnectivityAndInternetAccess {
             ((HttpsURLConnection) connection).setSSLSocketFactory(TLS_12_SOCKET_FACTORY);
         }
     }
+
     private static NetworkState networkStateFromCapabilities(
             NetworkCapabilities capabilities) {
         boolean connected = isUsable(capabilities);
@@ -1133,9 +1305,11 @@ public final class ConnectivityAndInternetAccess {
                 captivePortal,
                 SystemClock.elapsedRealtime());
     }
+
     private static NetworkState disconnectedNetworkState() {
         return new NetworkState(false, false, false, SystemClock.elapsedRealtime());
     }
+
     private static ConnectivityManager manager(Context context) {
         ConnectivityManager connectivityManager =
                 (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -1144,18 +1318,22 @@ public final class ConnectivityAndInternetAccess {
         }
         return connectivityManager;
     }
+
     private static boolean isUsable(NetworkCapabilities capabilities) {
         if (capabilities == null
                 || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
             return false;
         }
+
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.P
                 || capabilities.hasCapability(
                         NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED);
     }
+
     private static boolean hasTransport(Context context, int transport) {
         requireContext(context);
         ConnectivityManager connectivityManager = manager(context);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             for (Network network : connectivityManager.getAllNetworks()) {
                 NetworkCapabilities capabilities =
@@ -1166,6 +1344,7 @@ public final class ConnectivityAndInternetAccess {
             }
             return false;
         }
+
         for (NetworkInfo info : legacyNetworks(connectivityManager)) {
             if (isConnectedLegacy(info)
                     && legacyTypeMatches(info.getType(), transport)) {
@@ -1174,21 +1353,26 @@ public final class ConnectivityAndInternetAccess {
         }
         return false;
     }
+
     private static boolean hasTransport(
             Context context,
             Network network,
             int transport) {
         requireContext(context);
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
             return hasTransport(context, transport);
         }
+
         if (network == null) {
             return false;
         }
+
         NetworkCapabilities capabilities =
                 manager(context).getNetworkCapabilities(network);
         return isUsable(capabilities) && capabilities.hasTransport(transport);
     }
+
     private static boolean legacyTypeMatches(int type, int transport) {
         if (transport == NetworkCapabilities.TRANSPORT_WIFI) {
             return type == ConnectivityManager.TYPE_WIFI;
@@ -1201,26 +1385,32 @@ public final class ConnectivityAndInternetAccess {
         }
         return false;
     }
+
     private static boolean isFast(NetworkCapabilities capabilities) {
         return isUsable(capabilities)
                 && capabilities.getLinkDownstreamBandwidthKbps() >= MINIMUM_FAST_KBPS
                 && capabilities.getLinkUpstreamBandwidthKbps() >= MINIMUM_FAST_KBPS;
     }
+
     private static NetworkInfo[] legacyNetworks(ConnectivityManager connectivityManager) {
         NetworkInfo[] networks = connectivityManager.getAllNetworkInfo();
         return networks != null ? networks : new NetworkInfo[0];
     }
+
     private static boolean isConnectedLegacy(NetworkInfo info) {
         return info != null && info.isAvailable() && info.isConnected();
     }
+
     private static boolean isConnectionFast(int type, int subType) {
         if (type == ConnectivityManager.TYPE_WIFI
                 || type == ConnectivityManager.TYPE_ETHERNET) {
             return true;
         }
+
         if (type != ConnectivityManager.TYPE_MOBILE) {
             return false;
         }
+
         switch (subType) {
             case TelephonyManager.NETWORK_TYPE_EVDO_0:
             case TelephonyManager.NETWORK_TYPE_EVDO_A:
@@ -1237,10 +1427,12 @@ public final class ConnectivityAndInternetAccess {
                 return false;
         }
     }
+
     private static Network selectProbeNetwork(ConnectivityManager connectivityManager) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
             return null;
         }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Network active = connectivityManager.getActiveNetwork();
             if (active != null
@@ -1249,6 +1441,7 @@ public final class ConnectivityAndInternetAccess {
             }
             return null;
         }
+
         for (Network network : connectivityManager.getAllNetworks()) {
             if (isUsable(connectivityManager.getNetworkCapabilities(network))) {
                 return network;
@@ -1256,54 +1449,67 @@ public final class ConnectivityAndInternetAccess {
         }
         return null;
     }
+
     private static List<String> normalizeHosts(List<String> hosts) {
         if (hosts == null) {
             throw new IllegalArgumentException("hosts == null");
         }
+
         Set<String> normalized = new LinkedHashSet<>();
         for (String raw : hosts) {
             if (raw == null) {
                 continue;
             }
+
             String value = raw.trim();
             if (value.isEmpty()) {
                 continue;
             }
+
             if (!value.regionMatches(true, 0, "https://", 0, 8)
                     && !value.regionMatches(true, 0, "http://", 0, 7)) {
                 value = "https://" + value + "/";
             }
+
             if (!isValidURL(value)) {
                 throw new IllegalArgumentException("Invalid HTTP(S) URL: " + value);
             }
             normalized.add(value);
         }
+
         if (normalized.isEmpty()) {
             throw new IllegalArgumentException("hosts cannot be empty");
         }
+
         return Collections.unmodifiableList(new ArrayList<>(normalized));
     }
+
     private static List<String> normalizeDnsResolvers(List<String> resolvers) {
         if (resolvers == null) {
             throw new IllegalArgumentException("dnsResolvers == null");
         }
+
         Set<String> normalized = new LinkedHashSet<>();
         for (String raw : resolvers) {
             if (raw == null) {
                 continue;
             }
+
             String value = raw.trim();
             if (!value.isEmpty()) {
                 parseDnsResolver(value);
                 normalized.add(value);
             }
         }
+
         return Collections.unmodifiableList(new ArrayList<>(normalized));
     }
+
     private static boolean isValidURL(String address) {
         if (address == null) {
             throw new IllegalArgumentException("url == null");
         }
+
         try {
             URL url = new URL(address);
             url.toURI();
@@ -1316,6 +1522,7 @@ public final class ConnectivityAndInternetAccess {
             return false;
         }
     }
+
     private static String dnsEndpointLabel(String resolver) {
         DnsResolver endpoint = parseDnsResolver(resolver);
         String host = endpoint.host.indexOf(':') >= 0
@@ -1323,21 +1530,26 @@ public final class ConnectivityAndInternetAccess {
                 : endpoint.host;
         return "dns://" + host + ":" + endpoint.port;
     }
+
     private static DnsResolver parseDnsResolver(String resolver) {
         if (resolver == null) {
             throw new IllegalArgumentException("resolver == null");
         }
+
         String value = resolver.trim();
         if (value.isEmpty()) {
             throw new IllegalArgumentException("Invalid DNS resolver");
         }
+
         String host;
         int port = DNS_PORT;
+
         if (value.startsWith("[")) {
             int closingBracket = value.indexOf(']');
             if (closingBracket <= 1) {
                 throw new IllegalArgumentException("Invalid DNS resolver");
             }
+
             host = value.substring(1, closingBracket).trim();
             String remainder = value.substring(closingBracket + 1).trim();
             if (!remainder.isEmpty()) {
@@ -1349,6 +1561,7 @@ public final class ConnectivityAndInternetAccess {
         } else {
             int firstColon = value.indexOf(':');
             int lastColon = value.lastIndexOf(':');
+
             if (firstColon > 0 && firstColon == lastColon) {
                 host = value.substring(0, firstColon).trim();
                 port = parsePort(value.substring(firstColon + 1));
@@ -1356,11 +1569,14 @@ public final class ConnectivityAndInternetAccess {
                 host = value;
             }
         }
+
         if (host.isEmpty() || port < 1 || port > 65_535) {
             throw new IllegalArgumentException("Invalid DNS resolver");
         }
+
         return new DnsResolver(host, port);
     }
+
     private static int parsePort(String rawPort) {
         try {
             int port = Integer.parseInt(rawPort.trim());
@@ -1372,6 +1588,7 @@ public final class ConnectivityAndInternetAccess {
             throw new IllegalArgumentException("Invalid DNS resolver port", exception);
         }
     }
+
     private static ExecutorService newProbeExecutor() {
         return Executors.newFixedThreadPool(MAX_PARALLEL_PROBES, runnable -> {
             Thread thread = new Thread(
@@ -1381,17 +1598,20 @@ public final class ConnectivityAndInternetAccess {
             return thread;
         });
     }
+
     private static boolean closeConnectionAttempt(ConnectionAttempt attempt) {
         synchronized (CONNECTION_ATTEMPT_LOCK) {
             if (attempt.closed) {
                 return false;
             }
+
             attempt.closed = true;
             CONNECTION_ATTEMPT_QUEUE.remove(attempt);
             CONNECTION_ATTEMPTS.updateAndGet(value -> value > 0 ? value - 1 : 0);
             return true;
         }
     }
+
     private static void clearConnectionAttempts() {
         synchronized (CONNECTION_ATTEMPT_LOCK) {
             for (ConnectionAttempt attempt : CONNECTION_ATTEMPT_QUEUE) {
@@ -1401,33 +1621,41 @@ public final class ConnectivityAndInternetAccess {
             CONNECTION_ATTEMPTS.set(0);
         }
     }
+
     private interface ProbeOperation {
         boolean run();
     }
+
     private static final class ProbeAttempt {
         private final String label;
         private final ProbeOperation operation;
+
         private ProbeAttempt(String label, ProbeOperation operation) {
             this.label = label;
             this.operation = operation;
         }
     }
+
     private static final class DnsResolver {
         private final String host;
         private final int port;
+
         private DnsResolver(String host, int port) {
             this.host = host;
             this.port = port;
         }
     }
+
     private static final class ConnectionAttempt {
         private boolean closed;
     }
+
     private static SSLSocketFactory createTls12Factory() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN
                 || Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             return null;
         }
+
         try {
             SSLContext context = SSLContext.getInstance("TLSv1.2");
             context.init(null, null, null);
@@ -1436,33 +1664,41 @@ public final class ConnectivityAndInternetAccess {
             return null;
         }
     }
+
     private static void requireContext(Context context) {
         if (context == null) {
             throw new IllegalArgumentException("context == null");
         }
     }
+
     private static final class Tls12SocketFactory extends SSLSocketFactory {
         private final SSLSocketFactory delegate;
+
         private Tls12SocketFactory(SSLSocketFactory delegate) {
             this.delegate = delegate;
         }
+
         @Override
         public String[] getDefaultCipherSuites() {
             return delegate.getDefaultCipherSuites();
         }
+
         @Override
         public String[] getSupportedCipherSuites() {
             return delegate.getSupportedCipherSuites();
         }
+
         @Override
         public Socket createSocket(Socket socket, String host, int port, boolean autoClose)
                 throws IOException {
             return enable(delegate.createSocket(socket, host, port, autoClose));
         }
+
         @Override
         public Socket createSocket(String host, int port) throws IOException {
             return enable(delegate.createSocket(host, port));
         }
+
         @Override
         public Socket createSocket(
                 String host,
@@ -1471,10 +1707,12 @@ public final class ConnectivityAndInternetAccess {
                 int localPort) throws IOException {
             return enable(delegate.createSocket(host, port, localHost, localPort));
         }
+
         @Override
         public Socket createSocket(InetAddress host, int port) throws IOException {
             return enable(delegate.createSocket(host, port));
         }
+
         @Override
         public Socket createSocket(
                 InetAddress address,
@@ -1483,6 +1721,7 @@ public final class ConnectivityAndInternetAccess {
                 int localPort) throws IOException {
             return enable(delegate.createSocket(address, port, localAddress, localPort));
         }
+
         private Socket enable(Socket socket) {
             if (socket instanceof SSLSocket) {
                 SSLSocket sslSocket = (SSLSocket) socket;
@@ -1494,3 +1733,5 @@ public final class ConnectivityAndInternetAccess {
         }
     }
 }
+
+
