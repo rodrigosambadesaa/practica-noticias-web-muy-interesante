@@ -7,13 +7,14 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-import android.app.Application;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.CompressFormat;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
 import android.widget.ImageView;
+
+import com.example.muyinteresante.util.ConnectivityAndInternetAccess;
 
 public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 	ImageView img;
@@ -24,7 +25,7 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 	private String currentUrl;
 
 	public AsignaImagenDeURL(ImageView img, Context c){
-		this.img =img;
+		this.img = img;
 		contexto = c;
 	}
 
@@ -32,7 +33,10 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 	protected void onPreExecute() {
 		super.onPreExecute();
 		mapaDeBits = null;
-		f=null;
+		f = null;
+		if (contexto != null) {
+			ConnectivityAndInternetAccess.beginConnectionAttempt(contexto);
+		}
 	}
 
 	@Override						// Recibe la url de la imagen a descargar
@@ -41,25 +45,28 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 		currentUrl = param[0];
         try {
             URL url = new URL(currentUrl);
-			f =Utilidades.getDiretorioCache(contexto);
-            if (f!=null) {  										
+			f = Utilidades.getDiretorioCache(contexto);
+            if (f != null) {  										
             	f = new File(f,"imagenes");
             	f.mkdirs(); // Crea las carpetas
      
             	// hasCode proporciona un valor numerico unico dado el texto de un URL, que a su vez es unico
-            	f = new File(f,String.valueOf(url.hashCode()));
+            	f = new File(f, String.valueOf(url.hashCode()));
             
 	            if (f.exists()){
 	            	mapaDeBits = BitmapFactory.decodeStream(new FileInputStream(f));
 	            }
 	            else {
+		            if (contexto != null && !ConnectivityAndInternetAccess.isConnectedOrConnecting(contexto)) {
+		            	return null;
+		            }
 		            HttpURLConnection conexion = (HttpURLConnection) url.openConnection();
 		            conexion.setConnectTimeout(8000);
 		            conexion.setReadTimeout(8000);
 		            conexion.connect();
 		            InputStream entrada = conexion.getInputStream();
 		            mapaDeBits = BitmapFactory.decodeStream(entrada);
-					if (mapaDeBits!=null) {
+					if (mapaDeBits != null) {
 						try { // Guardamos la imagen para evitar posteriores descargas
 							mapaDeBits.compress(CompressFormat.PNG, 95, new FileOutputStream(f));
 						} catch (Exception e) { e.printStackTrace(); try {f.delete();} catch(Exception ex){} }
@@ -82,6 +89,7 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 	@Override
 	protected void onPostExecute(Void result) {
 		super.onPostExecute(result);
+		ConnectivityAndInternetAccess.endConnectionAttempt();
 		if (img != null) {
 			Object tag = img.getTag();
 			if (mapaDeBits != null && (tag == null || tag.equals(currentUrl))) {
@@ -93,13 +101,9 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 	@Override
 	protected void onCancelled() {
 		super.onCancelled();
-		
-		 if (f!=null && f.exists()) {
-			 try {f.delete();} catch(Exception ex){} 
-		  }
+		ConnectivityAndInternetAccess.endConnectionAttempt();
+		if (f != null && f.exists()) {
+			try { f.delete(); } catch(Exception ex){} 
+		}
 	}
-	
-	
-
-
 }

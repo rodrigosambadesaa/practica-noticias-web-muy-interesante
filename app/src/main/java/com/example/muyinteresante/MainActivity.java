@@ -137,24 +137,32 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
     }
 
     private void actualizarInterfazEstadoRed(ConnectivityAndInternetAccess.NetworkState state) {
-        if (state == null) return;
+        // Comprobaciones avanzadas de red usando los métodos relevantes de ConnectivityAndInternetAccess
+        boolean isConnectedOrConnecting = ConnectivityAndInternetAccess.isConnectedOrConnecting(this);
+        boolean isConnected = ConnectivityAndInternetAccess.isConnected(this);
+        boolean isWifi = ConnectivityAndInternetAccess.isConnectedWifi(this);
+        boolean isMobile = ConnectivityAndInternetAccess.isConnectedMobile(this);
+        boolean isVpn = ConnectivityAndInternetAccess.vpnActive(this);
+        boolean isAirplane = ConnectivityAndInternetAccess.isAirplaneModeOn(this);
+        boolean isFast = ConnectivityAndInternetAccess.isConnectedFast(this);
+        boolean isCaptive = ConnectivityAndInternetAccess.isCaptivePortalDetected(this);
+        boolean isValidated = ConnectivityAndInternetAccess.isInternetValidated(this);
 
-        boolean isConnected = state.isConnected();
-        boolean isValidated = state.isInternetValidated();
-        boolean isCaptive = state.isCaptivePortalDetected();
+        Log.d(TAG, "Chequeo de red: ConnectedOrConnecting=" + isConnectedOrConnecting +
+                ", Connected=" + isConnected + ", Wifi=" + isWifi + ", Mobile=" + isMobile +
+                ", VPN=" + isVpn + ", Airplane=" + isAirplane + ", Fast=" + isFast);
 
-        Log.d(TAG, "Estado de red actualizado: Connected=" + isConnected + ", Validated=" + isValidated + ", Captive=" + isCaptive);
-
-        if (!isConnected) {
+        if (!isConnectedOrConnecting && !isConnected) {
             // Disconnected / Offline
             viewNetworkDot.setBackgroundResource(R.color.status_offline);
-            tvNetworkStatusText.setText("Sin red");
+            tvNetworkStatusText.setText(isAirplane ? "Modo Avión" : "Sin red");
             tvNetworkStatusText.setTextColor(getResources().getColor(R.color.status_offline));
-            layoutNetworkStatusPill.setBackgroundResource(R.drawable.bg_status_badge);
 
             bannerNetworkNotice.setVisibility(View.VISIBLE);
             bannerNetworkNotice.setBackgroundResource(R.color.status_offline_bg);
-            tvBannerText.setText("Dispositivo sin conexión a internet. Mostrando noticias guardadas en caché.");
+            tvBannerText.setText(isAirplane ?
+                    "Modo Avión activado. Mostrando noticias guardadas en caché." :
+                    "Dispositivo sin conexión a internet. Mostrando noticias guardadas en caché.");
         } else if (isCaptive) {
             // Captive Portal
             viewNetworkDot.setBackgroundResource(R.color.status_warning);
@@ -164,19 +172,28 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
             bannerNetworkNotice.setVisibility(View.VISIBLE);
             bannerNetworkNotice.setBackgroundResource(R.color.status_warning_bg);
             tvBannerText.setText("Se requiere inicio de sesión en red (Portal Cautivo detectado).");
-        } else if (!isValidated) {
+        } else if (!isValidated && !isConnected) {
             // Connected without validated internet
             viewNetworkDot.setBackgroundResource(R.color.status_warning);
-            tvNetworkStatusText.setText("Sin acceso");
+            tvNetworkStatusText.setText("Conectando...");
             tvNetworkStatusText.setTextColor(getResources().getColor(R.color.status_warning));
 
             bannerNetworkNotice.setVisibility(View.VISIBLE);
             bannerNetworkNotice.setBackgroundResource(R.color.status_warning_bg);
-            tvBannerText.setText("Conectado a la red pero sin acceso verificado a internet.");
+            tvBannerText.setText("Conectado a la interfaz de red pero sin acceso verificado a internet.");
         } else {
             // Fully connected & validated
             viewNetworkDot.setBackgroundResource(R.color.status_online);
-            tvNetworkStatusText.setText("Online");
+
+            String statusType = "Online";
+            if (isVpn) {
+                statusType = "Online (VPN)";
+            } else if (isWifi) {
+                statusType = "Online (Wi-Fi)";
+            } else if (isMobile) {
+                statusType = isFast ? "Online (4G/5G)" : "Online (Móvil Lento)";
+            }
+            tvNetworkStatusText.setText(statusType);
             tvNetworkStatusText.setTextColor(getResources().getColor(R.color.status_online));
 
             bannerNetworkNotice.setVisibility(View.GONE);
@@ -197,17 +214,24 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
     }
 
     private void ejecutarDescargarNoticias() {
+        // Comprobación rápida inicial de estado de red antes del sondeador activo
+        if (!ConnectivityAndInternetAccess.isConnectedOrConnecting(this)) {
+            Toast.makeText(this, "Sin conexión disponible para iniciar la descarga.", Toast.LENGTH_SHORT).show();
+            usarNoticiasOffline();
+            return;
+        }
+
         swipeRefreshLayout.setRefreshing(true);
 
-        // Preflight rápido DNS/Red utilizando el sondeador del Gist
+        // Sondeo activo DNS-first / HTTP probe del Gist
         ConnectivityAndInternetAccess.checkInternetAsyncDefault(this, new ConnectivityAndInternetAccess.InternetCallback() {
             @Override
             public void onResult(ConnectivityAndInternetAccess.InternetResult result) {
-                swipeRefreshLayout.setRefreshing(false);
                 if (result != null && result.isReachable()) {
                     Log.d(TAG, "Conexión a internet verificada mediante sondeador DNS/HTTP (" + result.getElapsedMilliseconds() + "ms). Iniciando descarga RSS...");
                     new DescargaNoticiasRSS(MainActivity.this, MainActivity.this).execute(RSS_URL, NoticiaRSS.RSS_MUY_INTERESANTE);
                 } else {
+                    swipeRefreshLayout.setRefreshing(false);
                     Log.w(TAG, "Chequeo activo de internet falló");
                     Toast.makeText(MainActivity.this, "Sin acceso a internet para descargar noticias.", Toast.LENGTH_SHORT).show();
                     usarNoticiasOffline();
@@ -248,26 +272,47 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
     private void ejecutarDiagnosticoRedCompleto() {
         final AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Diagnóstico de Conectividad")
-                .setMessage("Realizando comprobación activa de resolución DNS y sondas HTTP...")
+                .setMessage("Ejecutando comprobación avanzada de red y sondeo activo DNS/HTTP...")
                 .setPositiveButton("Cerrar", null)
                 .show();
 
+        // Chequeos estáticos rápidos de ConnectivityAndInternetAccess
+        boolean isConnectedOrConnecting = ConnectivityAndInternetAccess.isConnectedOrConnecting(this);
+        boolean isConnected = ConnectivityAndInternetAccess.isConnected(this);
+        boolean isWifi = ConnectivityAndInternetAccess.isConnectedWifi(this);
+        boolean isMobile = ConnectivityAndInternetAccess.isConnectedMobile(this);
+        boolean isFast = ConnectivityAndInternetAccess.isConnectedFast(this);
+        boolean isVpn = ConnectivityAndInternetAccess.vpnActive(this);
+        boolean isAirplane = ConnectivityAndInternetAccess.isAirplaneModeOn(this);
+
+        // Sondeo activo DNS/HTTP
         ConnectivityAndInternetAccess.checkInternetAsyncDefault(this, new ConnectivityAndInternetAccess.InternetCallback() {
             @Override
             public void onResult(ConnectivityAndInternetAccess.InternetResult result) {
                 if (dialog != null && dialog.isShowing()) {
-                    String stateInfo = currentNetworkState != null ? currentNetworkState.toString() : "Desconocido";
                     boolean reachable = result != null && result.isReachable();
                     String reachedHost = result != null ? result.getReachedHost() : "Ninguno";
                     long time = result != null ? result.getElapsedMilliseconds() : 0;
 
-                    String info = "Resultado del Diagnóstico Activo (Gist):\n" +
-                            "• Estado en línea: " + (reachable ? "SÍ (Internet Verificado)" : "NO (Sin Internet)") + "\n" +
-                            "• Host alcanzado: " + reachedHost + "\n" +
-                            "• Tiempo de respuesta DNS/HTTP: " + time + " ms\n\n" +
-                            "Información del SO (NetworkState):\n" + stateInfo;
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("📡 ESTADO DE INTERFAZ DE RED:\n");
+                    sb.append("• Estado general: ").append(isConnected ? "Conectado" : (isConnectedOrConnecting ? "Conectando..." : "Desconectado")).append("\n");
+                    sb.append("• Tipo de red: ").append(isWifi ? "Wi-Fi" : (isMobile ? "Móvil / Celular" : "Otra / Ninguna")).append("\n");
+                    sb.append("• Velocidad estimada: ").append(isFast ? "Rápida (High Speed)" : "Lenta / Desconocida").append("\n");
+                    sb.append("• Red VPN Activa: ").append(isVpn ? "SÍ" : "No").append("\n");
+                    sb.append("• Modo Avión: ").append(isAirplane ? "ACTIVADO" : "Desactivado").append("\n\n");
 
-                    dialog.setMessage(info);
+                    sb.append("🔍 PRUEBA ACTIVA DNS/HTTP (GIST):\n");
+                    sb.append("• Internet Real: ").append(reachable ? "SÍ (Internet Verificado)" : "NO (Sin Internet)").append("\n");
+                    sb.append("• Servidor alcanzado: ").append(reachedHost).append("\n");
+                    sb.append("• Latencia de respuesta: ").append(time).append(" ms\n");
+
+                    if (currentNetworkState != null) {
+                        sb.append("\n📋 REGISTRO DE RED (NetworkState):\n");
+                        sb.append(currentNetworkState.toString());
+                    }
+
+                    dialog.setMessage(sb.toString());
                 }
             }
         });

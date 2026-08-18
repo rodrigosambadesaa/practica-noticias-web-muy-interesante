@@ -13,6 +13,9 @@ import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.os.AsyncTask;
+import android.util.Log;
+
+import com.example.muyinteresante.util.ConnectivityAndInternetAccess;
 
 /* Parsea un canal RSS y devuelve sus items en un ArrayList */
 
@@ -35,6 +38,11 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 	protected void onPreExecute() {
 		super.onPreExecute();
 		
+		if (contexto != null) {
+			// Registramos inicio de intento de conexión para seguimiento de estado
+			ConnectivityAndInternetAccess.beginConnectionAttempt(contexto);
+		}
+		
 		pd = new ProgressDialog(contexto);
 		pd.setMessage(MENSAJE_PD);
 		pd.setCancelable(true);
@@ -42,7 +50,6 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 			
 			@Override
 			public void onCancel(DialogInterface dialog) {
-				
 				DescargaNoticiasRSS.this.cancel(true);
 			}
 		});
@@ -55,6 +62,9 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 	protected void onCancelled() {
 		super.onCancelled();
 		
+		// Finalizamos intento de conexión
+		ConnectivityAndInternetAccess.endConnectionAttempt();
+		
 		if (pd!=null) pd.dismiss();
 	}
 	
@@ -65,6 +75,11 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 		InputStream entrada = null;
 		
 		try{
+			if (contexto != null && !ConnectivityAndInternetAccess.isConnectedOrConnecting(contexto)) {
+				Log.w("DescargaNoticiasRSS", "Descarga cancelada: Dispositivo sin conexión según ConnectivityAndInternetAccess.");
+				return null;
+			}
+
 			DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 			dbf.setIgnoringComments(true);
 			dbf.setCoalescing(true);
@@ -73,6 +88,8 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 			 // Creamos objeto URL a partir de la direccion web para conectarnos con el servidor
 			URL url = new URL(params[0]);
 			URLConnection conex = url.openConnection(); // Abrimos la conexion
+			conex.setConnectTimeout(10000);
+			conex.setReadTimeout(10000);
 			conex.setUseCaches(false); // Evitamos la cache de datos.
 			conex.setRequestProperty("accept", "text/xml"); // Indicamos formato a recibir
 			 
@@ -112,6 +129,9 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 	protected void onPostExecute(ArrayList<NoticiaRSS> result) {
 		super.onPostExecute(result);
 		
+		// Finalizamos intento de conexión
+		ConnectivityAndInternetAccess.endConnectionAttempt();
+		
 		if (pd!=null) pd.dismiss();
 		if (objetoReceptor!=null ) objetoReceptor.onRecibeNoticiasRSS(result);
 	}
@@ -122,9 +142,4 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 		super.onProgressUpdate(values);
 		pd.setMessage(MENSAJE_PD + values[0]);
 	}
-
-
-
-
-
 }
