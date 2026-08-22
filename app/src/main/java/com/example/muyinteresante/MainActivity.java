@@ -2,6 +2,9 @@ package com.example.muyinteresante;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.v4.view.OnApplyWindowInsetsListener;
+import android.support.v4.view.ViewCompat;
+import android.support.v4.view.WindowInsetsCompat;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
@@ -54,7 +57,7 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Toolbar toolbar = findViewById(R.id.toolbar);
+        final Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayShowTitleEnabled(false);
@@ -72,6 +75,28 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
 
         layoutEmptyState = findViewById(R.id.layoutEmptyState);
         btnReintentar = findViewById(R.id.btnReintentar);
+
+        // Soporte para márgenes de ventana/cámara en smartphones tipo S25 Ultra
+        final View rootView = findViewById(android.R.id.content);
+        if (rootView != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(rootView, new OnApplyWindowInsetsListener() {
+                @Override
+                public WindowInsetsCompat onApplyWindowInsets(View v, WindowInsetsCompat insets) {
+                    int top = insets.getSystemWindowInsetTop();
+                    int bottom = insets.getSystemWindowInsetBottom();
+                    int left = insets.getSystemWindowInsetLeft();
+                    int right = insets.getSystemWindowInsetRight();
+
+                    if (toolbar != null && top > 0) {
+                        toolbar.setPadding(left, top, right, 0);
+                    }
+                    if (rvNoticias != null && bottom > 0) {
+                        rvNoticias.setPadding(left, rvNoticias.getPaddingTop(), right, bottom + 12);
+                    }
+                    return insets;
+                }
+            });
+        }
 
         rvNoticias.setLayoutManager(new LinearLayoutManager(this));
         adapter = new NoticiasAdapter(this, new ArrayList<NoticiaRSS>(), new NoticiasAdapter.OnNoticiaClickListener() {

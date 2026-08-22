@@ -4,6 +4,9 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
+import android.support.v4.view.OnApplyWindowInsetsListener;
+import android.support.v4.view.ViewCompat;
+import android.support.v4.view.WindowInsetsCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
@@ -36,7 +39,7 @@ public class DetalleActivity extends AppCompatActivity {
         articleUrl = getIntent().getStringExtra(EXTRA_URL);
         articleTitle = getIntent().getStringExtra(EXTRA_TITULO);
 
-        Toolbar toolbar = findViewById(R.id.toolbarDetalle);
+        final Toolbar toolbar = findViewById(R.id.toolbarDetalle);
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
@@ -45,6 +48,28 @@ public class DetalleActivity extends AppCompatActivity {
 
         progressBar = findViewById(R.id.progressBarWeb);
         webView = findViewById(R.id.webViewDetalle);
+
+        // Soporte para márgenes de ventana/cámara (S25 Ultra Notch/Cutout & Insets)
+        final View rootView = findViewById(android.R.id.content);
+        if (rootView != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(rootView, new OnApplyWindowInsetsListener() {
+                @Override
+                public WindowInsetsCompat onApplyWindowInsets(View v, WindowInsetsCompat insets) {
+                    int top = insets.getSystemWindowInsetTop();
+                    int bottom = insets.getSystemWindowInsetBottom();
+                    int left = insets.getSystemWindowInsetLeft();
+                    int right = insets.getSystemWindowInsetRight();
+
+                    if (toolbar != null && top > 0) {
+                        toolbar.setPadding(left, top, right, 0);
+                    }
+                    if (webView != null && bottom > 0) {
+                        webView.setPadding(left, 0, right, bottom);
+                    }
+                    return insets;
+                }
+            });
+        }
 
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -107,12 +132,15 @@ public class DetalleActivity extends AppCompatActivity {
                 webView.reload();
             }
             return true;
-        } else if (id == R.id.action_test_conectividad) {
-            try {
-                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(articleUrl));
-                startActivity(browserIntent);
-            } catch (Exception e) {
-                Toast.makeText(this, "No se pudo abrir el navegador", Toast.LENGTH_SHORT).show();
+        } else if (id == R.id.action_abrir_navegador || id == R.id.action_test_conectividad) {
+            if (articleUrl != null && !articleUrl.isEmpty()) {
+                try {
+                    Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(articleUrl));
+                    Intent chooser = Intent.createChooser(browserIntent, "Abrir noticia en...");
+                    startActivity(chooser);
+                } catch (Exception e) {
+                    Toast.makeText(this, "No se pudo abrir el navegador", Toast.LENGTH_SHORT).show();
+                }
             }
             return true;
         }

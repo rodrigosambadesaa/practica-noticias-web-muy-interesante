@@ -2,6 +2,7 @@ package com.example.muyinteresante;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.support.annotation.NonNull;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -11,6 +12,7 @@ import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 import com.example.muyinteresanteNoTocar.AsignaImagenDeURL;
 import com.example.muyinteresanteNoTocar.NoticiaRSS;
 import java.util.ArrayList;
@@ -100,6 +102,23 @@ public class NoticiasAdapter extends RecyclerView.Adapter<NoticiasAdapter.Notici
         holder.itemView.setOnClickListener(clickListener);
         holder.btnLeerMas.setOnClickListener(clickListener);
 
+        if (holder.btnNavegador != null) {
+            holder.btnNavegador.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (noticia != null && noticia.getEnlace() != null && !noticia.getEnlace().isEmpty()) {
+                        try {
+                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(noticia.getEnlace()));
+                            Intent chooser = Intent.createChooser(intent, "Abrir noticia en...");
+                            context.startActivity(chooser);
+                        } catch (Exception e) {
+                            Toast.makeText(context, "No se pudo abrir la noticia en el navegador", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }
+            });
+        }
+
         holder.btnCompartir.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -127,6 +146,7 @@ public class NoticiasAdapter extends RecyclerView.Adapter<NoticiasAdapter.Notici
         TextView tvDescripcion;
         TextView tvFecha;
         Button btnLeerMas;
+        Button btnNavegador;
         ImageButton btnCompartir;
 
         public NoticiaViewHolder(@NonNull View itemView) {
@@ -136,6 +156,7 @@ public class NoticiasAdapter extends RecyclerView.Adapter<NoticiasAdapter.Notici
             tvDescripcion = itemView.findViewById(R.id.tvDescripcionNoticia);
             tvFecha = itemView.findViewById(R.id.tvFechaNoticia);
             btnLeerMas = itemView.findViewById(R.id.btnLeerMas);
+            btnNavegador = itemView.findViewById(R.id.btnNavegador);
             btnCompartir = itemView.findViewById(R.id.btnCompartir);
         }
     }
