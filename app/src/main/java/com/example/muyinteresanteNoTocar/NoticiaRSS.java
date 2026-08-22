@@ -87,37 +87,67 @@ public class NoticiaRSS {
 		
 		fecha = convierteFechaRSSaDate();
 		
-		if (canal.equalsIgnoreCase(RSS_MUY_INTERESANTE)){ // Particularidades de este canal para extraer el URL de la imagen
-		  try{  
-
-			  Scanner s = new Scanner(descripcion); // Extraemos imagen y descripcion
-			  s.useDelimiter("\\s*>\\s*");
-			  String imagen="";
-			  if (s.hasNext()) {
-			     imagen = s.next();
-			  }
-			  s.close();
-			  if (imagen.length()>0) {
-				  Scanner s2 = new Scanner(imagen);
-				  s2.useDelimiter("\\s*'|\"\\s*"); // Extraemos url
-				  String str;
-				  while(s2.hasNext()){
-					  str=s2.next();
-					  if (str.contains("http://") || str.contains("https://")){
-						  urlImagen=str;
-						  break;
-					  }
+		if (canal.equalsIgnoreCase(RSS_MUY_INTERESANTE)){
+		  try {  
+			  // 1. Intentar desde enclosure / media:content / media:thumbnail
+			  if (itemXML.getElementsByTagName("enclosure").getLength() > 0) {
+				  Element enclosure = (Element) itemXML.getElementsByTagName("enclosure").item(0);
+				  if (enclosure.hasAttribute("url")) {
+					  urlImagen = enclosure.getAttribute("url");
 				  }
-				  s2.close();
-				  
-				  descripcion=descripcion.substring(imagen.length()+1);
-				  descripcion=Html.fromHtml(descripcion.replaceAll("<[^>]*>","").replaceAll("\t","")).toString(); // Se elimina el codigo html
 			  }
-			 
-			 
-		  } catch (Exception e) { e.printStackTrace(); }
-		    
-		
+			  if ((urlImagen == null || urlImagen.isEmpty()) && itemXML.getElementsByTagName("media:content").getLength() > 0) {
+				  Element media = (Element) itemXML.getElementsByTagName("media:content").item(0);
+				  if (media.hasAttribute("url")) {
+					  urlImagen = media.getAttribute("url");
+				  }
+			  }
+			  if ((urlImagen == null || urlImagen.isEmpty()) && itemXML.getElementsByTagName("media:thumbnail").getLength() > 0) {
+				  Element thumb = (Element) itemXML.getElementsByTagName("media:thumbnail").item(0);
+				  if (thumb.hasAttribute("url")) {
+					  urlImagen = thumb.getAttribute("url");
+				  }
+			  }
+
+			  // 2. Extraer de la descripción si contiene etiquetas de imagen
+			  if (urlImagen == null || urlImagen.isEmpty()) {
+				  Scanner s = new Scanner(descripcion);
+				  s.useDelimiter("\\s*>\\s*");
+				  String imagen = "";
+				  if (s.hasNext()) {
+					 imagen = s.next();
+				  }
+				  s.close();
+				  if (imagen.length() > 0 && (imagen.contains("http://") || imagen.contains("https://"))) {
+					  Scanner s2 = new Scanner(imagen);
+					  s2.useDelimiter("\\s*'|\"\\s*");
+					  while (s2.hasNext()) {
+						  String str = s2.next();
+						  if (str.contains("http://") || str.contains("https://")) {
+							  urlImagen = str;
+							  break;
+						  }
+					  }
+					  s2.close();
+				  }
+			  }
+
+			  // 3. Si la descripción tenía código HTML, limpiarlo
+			  if (descripcion != null && !descripcion.isEmpty()) {
+				  descripcion = Html.fromHtml(descripcion.replaceAll("<[^>]*>", "").replaceAll("\t", "")).toString().trim();
+			  }
+
+			  // 4. Si urlImagen sigue vacía, asignar el enlace del artículo como fallback para og:image
+			  if ((urlImagen == null || urlImagen.trim().isEmpty()) && enlace != null && !enlace.trim().isEmpty()) {
+				  urlImagen = enlace.trim();
+			  }
+
+		  } catch (Exception e) { 
+			  e.printStackTrace();
+			  if ((urlImagen == null || urlImagen.trim().isEmpty()) && enlace != null) {
+				  urlImagen = enlace.trim();
+			  }
+		  }
 		}
 
 	}

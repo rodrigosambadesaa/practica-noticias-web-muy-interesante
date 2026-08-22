@@ -81,8 +81,11 @@ public class NoticiasAdapter extends RecyclerView.Adapter<NoticiasAdapter.Notici
         holder.tvFecha.setText(fechaText != null ? fechaText : "");
 
         String urlImagen = noticia.getUrlImagen();
+        if (urlImagen == null || urlImagen.trim().isEmpty()) {
+            urlImagen = noticia.getEnlace();
+        }
         holder.imgNoticia.setImageBitmap(null);
-        if (urlImagen != null && !urlImagen.isEmpty()) {
+        if (urlImagen != null && !urlImagen.trim().isEmpty()) {
             holder.imgNoticia.setTag(urlImagen);
             new AsignaImagenDeURL(holder.imgNoticia, context).execute(urlImagen);
         } else {
