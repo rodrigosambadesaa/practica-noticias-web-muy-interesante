@@ -16,10 +16,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -44,7 +44,7 @@ jobs:
 
           ### Cambios principales
           - La aplicación pasa a mostrarse como **Noticias Muy Interesante**.
-          - Nuevo icono de launcher moderno en recursos mdpi, hdpi, xhdpi, xxhdpi y xxxhdpi.
+          - Nuevo icono de launcher moderno, reconstruido de forma determinista durante el build como un recurso JPEG estándar compatible con AAPT2.
           - Se mantiene la carga progresiva de noticias antiguas mediante infinite scroll.
           - Se mantiene la deduplicación de noticias y la caché offline.
           - Versión actualizada a 1.2.0 (`versionCode 3`).
