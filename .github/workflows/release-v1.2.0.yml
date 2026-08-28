@@ -1,4 +1,4 @@
-name: Release v1.2.0
+name: Update Release v1.2.0
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-and-update-release:
     runs-on: ubuntu-latest
 
     steps:
@@ -34,7 +34,7 @@ jobs:
       - name: Prepare release asset
         run: cp app/build/outputs/apk/release/app-release.apk noticias-muy-interesante-v1.2.0.apk
 
-      - name: Create GitHub release
+      - name: Update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -45,13 +45,22 @@ jobs:
 
           ### Cambios principales
           - La aplicación pasa a mostrarse como **Noticias Muy Interesante**.
-          - Nuevo icono de launcher moderno, integrado como recurso WebP de alta resolución.
+          - Nuevo icono de launcher moderno integrado como recurso WebP de alta resolución.
           - Se mantiene la carga progresiva de noticias antiguas mediante infinite scroll.
           - Se mantiene la deduplicación de noticias y la caché offline.
           - Versión actualizada a 1.2.0 (`versionCode 3`).
           NOTES
 
-          gh release create v1.2.0 noticias-muy-interesante-v1.2.0.apk \
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f v1.2.0 "$GITHUB_SHA"
+          git push origin -f refs/tags/v1.2.0
+
+          gh release upload v1.2.0 noticias-muy-interesante-v1.2.0.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+          gh release edit v1.2.0 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "v1.2.0 - Noticias Muy Interesante" \
