@@ -16,13 +16,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
@@ -37,18 +38,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cat > RELEASE_NOTES.md <<'EOF'
+          cat > RELEASE_NOTES.md <<'NOTES'
           ## v1.2.0 - Noticias Muy Interesante
 
           Actualización visual y de identidad de la aplicación, manteniendo el infinite scroll incorporado en v1.1.0.
 
           ### Cambios principales
           - La aplicación pasa a mostrarse como **Noticias Muy Interesante**.
-          - Nuevo icono de launcher moderno, reconstruido de forma determinista durante el build como un recurso JPEG estándar compatible con AAPT2.
+          - Nuevo icono de launcher moderno, integrado como recurso WebP de alta resolución.
           - Se mantiene la carga progresiva de noticias antiguas mediante infinite scroll.
           - Se mantiene la deduplicación de noticias y la caché offline.
           - Versión actualizada a 1.2.0 (`versionCode 3`).
-          EOF
+          NOTES
 
           gh release create v1.2.0 noticias-muy-interesante-v1.2.0.apk \
             --repo "$GITHUB_REPOSITORY" \

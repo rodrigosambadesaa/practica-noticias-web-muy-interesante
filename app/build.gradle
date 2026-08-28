@@ -2,11 +2,6 @@ plugins {
     id 'com.android.application'
 }
 
-def generatedLauncherResDir = file("$buildDir/generated/launcherIcon/res")
-def launcherIconParts = fileTree("$projectDir/icon-source") {
-    include 'icon.part*'
-}
-
 android {
     namespace 'com.example.muyinteresante'
     compileSdkVersion 35
@@ -17,15 +12,6 @@ android {
         targetSdkVersion 35
         versionCode 3
         versionName "1.2.0"
-    }
-
-    sourceSets {
-        main {
-            // El icono de launcher se reconstruye desde los fragmentos Base64
-            // antes de compilar. Esto mantiene en Git un recurso textual fiable
-            // y genera un JPEG estándar que AAPT2 acepta sin problemas.
-            res.srcDir generatedLauncherResDir
-        }
     }
 
     compileOptions {
@@ -40,35 +26,6 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-}
-
-tasks.register('generateLauncherIcon') {
-    inputs.files(launcherIconParts)
-    def outputFile = file("$generatedLauncherResDir/drawable-nodpi/ic_launcher.jpg")
-    outputs.file(outputFile)
-
-    doLast {
-        if (launcherIconParts.files.isEmpty()) {
-            throw new GradleException('No se encontraron los fragmentos del icono de launcher.')
-        }
-
-        outputFile.parentFile.mkdirs()
-        def encoded = launcherIconParts.files
-                .toList()
-                .sort { a, b -> a.name <=> b.name }
-                .collect { it.getText('UTF-8').trim() }
-                .join('')
-
-        outputFile.bytes = java.util.Base64.decoder.decode(encoded)
-    }
-}
-
-tasks.named('generateLauncherIcon').configure {
-    mustRunAfter(tasks.named('clean'))
-}
-
-tasks.named('preBuild').configure {
-    dependsOn(tasks.named('generateLauncherIcon'))
 }
 
 dependencies {
