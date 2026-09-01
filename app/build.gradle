@@ -6,6 +6,18 @@ android {
     namespace 'com.example.muyinteresante'
     compileSdkVersion 35
 
+    signingConfigs {
+        release {
+            def keystorePath = System.getenv('ANDROID_KEYSTORE_PATH')
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+
     defaultConfig {
         applicationId "com.example.muyinteresante"
         minSdkVersion 17
@@ -21,7 +33,11 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            if (System.getenv('ANDROID_KEYSTORE_PATH')) {
+                signingConfig signingConfigs.release
+            } else {
+                throw new GradleException('Falta la firma de release: configura ANDROID_KEYSTORE_PATH y las credenciales de la keystore.')
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
