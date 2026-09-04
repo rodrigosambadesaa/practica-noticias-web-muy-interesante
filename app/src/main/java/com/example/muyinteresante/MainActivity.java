@@ -32,7 +32,10 @@ import java.util.ArrayList;
 public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
 
     private static final String TAG = "MainActivity";
-    private static final String RSS_URL = "http://feeds.feedburner.com/Muyinteresantees?format=xml";
+    private static final String RSS_URL = "https://www.muyinteresante.com/feed/";
+    private static final String RSS_PAGE_URL = "https://www.muyinteresante.com/feed/?paged=";
+    private static final int LOAD_MORE_THRESHOLD = 4;
+    private static final int MAX_CONSECUTIVE_DUPLICATE_PAGES = 2;
 
     private SwipeRefreshLayout swipeRefreshLayout;
     private RecyclerView rvNoticias;
@@ -51,6 +54,11 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
 
     private ConnectivityAndInternetAccess.NetworkObserver networkObserver;
     private ConnectivityAndInternetAccess.NetworkState currentNetworkState;
+
+    private boolean isLoadingMore = false;
+    private boolean hasMoreNews = true;
+    private int nextArchivePage = 2;
+    private int consecutiveDuplicatePages = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,7 +106,8 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
             });
         }
 
-        rvNoticias.setLayoutManager(new LinearLayoutManager(this));
+        final LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+        rvNoticias.setLayoutManager(layoutManager);
         adapter = new NoticiasAdapter(this, new ArrayList<NoticiaRSS>(), new NoticiasAdapter.OnNoticiaClickListener() {
             @Override
             public void onNoticiaClick(NoticiaRSS noticia) {
@@ -111,6 +120,24 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
             }
         });
         rvNoticias.setAdapter(adapter);
+
+        // Infinite scroll: cuando el usuario se aproxima al final se solicita la
+        // siguiente página del feed oficial, que contiene noticias más antiguas.
+        rvNoticias.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                if (dy <= 0 || isLoadingMore || !hasMoreNews || adapter == null) {
+                    return;
+                }
+
+                int totalItems = adapter.getItemCount();
+                int lastVisibleItem = layoutManager.findLastVisibleItemPosition();
+                if (totalItems > 0 && lastVisibleItem >= totalItems - 1 - LOAD_MORE_THRESHOLD) {
+                    cargarMasNoticias();
+                }
+            }
+        });
 
         swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
@@ -265,6 +292,82 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
         });
     }
 
+    /**
+     * Solicita una página adicional del feed oficial sin bloquear la interfaz con
+     * un diálogo modal. Las páginas se acumulan en el adapter y se deduplican.
+     */
+    private void cargarMasNoticias() {
+        if (isLoadingMore || !hasMoreNews || adapter == null) {
+            return;
+        }
+
+        if (!ConnectivityAndInternetAccess.isConnectedOrConnecting(this)) {
+            Log.d(TAG, "No se cargan más noticias: sin conexión disponible.");
+            return;
+        }
+
+        isLoadingMore = true;
+        final int pageToLoad = nextArchivePage;
+        Log.d(TAG, "Solicitando noticias antiguas. Página RSS: " + pageToLoad);
+
+        ConnectivityAndInternetAccess.checkInternetAsyncDefault(this, new ConnectivityAndInternetAccess.InternetCallback() {
+            @Override
+            public void onResult(ConnectivityAndInternetAccess.InternetResult result) {
+                if (result == null || !result.isReachable()) {
+                    isLoadingMore = false;
+                    Log.w(TAG, "No se pudo verificar internet para cargar la página " + pageToLoad);
+                    return;
+                }
+
+                new DescargaNoticiasRSS(MainActivity.this, new iNoticiaRSS() {
+                    @Override
+                    public void onRecibeNoticiasRSS(ArrayList<NoticiaRSS> listaNoticias) {
+                        isLoadingMore = false;
+
+                        if (listaNoticias == null) {
+                            // Error transitorio: no avanzamos de página para poder reintentarlo.
+                            Log.w(TAG, "Error descargando la página RSS " + pageToLoad + ". Se reintentará al volver al final.");
+                            return;
+                        }
+
+                        if (listaNoticias.isEmpty()) {
+                            hasMoreNews = false;
+                            Log.d(TAG, "Fin del archivo RSS alcanzado en la página " + pageToLoad);
+                            Toast.makeText(MainActivity.this, "No hay más noticias antiguas disponibles", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        int added = adapter.appendData(listaNoticias);
+                        nextArchivePage = pageToLoad + 1;
+
+                        if (added > 0) {
+                            consecutiveDuplicatePages = 0;
+                            NewsCacheManager.saveNewsToCache(MainActivity.this, adapter.getAllData());
+                            Log.d(TAG, "Página " + pageToLoad + " cargada: " + added + " noticias nuevas (" + listaNoticias.size() + " recibidas).");
+                        } else {
+                            consecutiveDuplicatePages++;
+                            Log.d(TAG, "Página " + pageToLoad + " sin noticias nuevas tras deduplicar.");
+
+                            // Algunos feeds pueden repetir una página al cambiar su contenido.
+                            // Saltamos como máximo un pequeño número de páginas para evitar un bucle infinito.
+                            if (consecutiveDuplicatePages >= MAX_CONSECUTIVE_DUPLICATE_PAGES) {
+                                hasMoreNews = false;
+                                Log.w(TAG, "Se detiene la paginación tras varias páginas consecutivas duplicadas.");
+                            } else {
+                                rvNoticias.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        cargarMasNoticias();
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }, false).execute(RSS_PAGE_URL + pageToLoad, NoticiaRSS.RSS_MUY_INTERESANTE);
+            }
+        });
+    }
+
     private void usarNoticiasOffline() {
         ArrayList<NoticiaRSS> cached = NewsCacheManager.loadNewsFromCache(this);
         if (cached != null && !cached.isEmpty()) {
@@ -287,6 +390,13 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
             NewsCacheManager.saveNewsToCache(this, listaNoticias);
             layoutEmptyState.setVisibility(View.GONE);
             rvNoticias.setVisibility(View.VISIBLE);
+
+            // Una actualización completa reinicia el recorrido del archivo.
+            nextArchivePage = 2;
+            hasMoreNews = true;
+            isLoadingMore = false;
+            consecutiveDuplicatePages = 0;
+
             Log.d(TAG, "Noticias recibidas con éxito: " + listaNoticias.size());
         } else {
             Toast.makeText(this, "No se pudieron obtener nuevas noticias del canal RSS", Toast.LENGTH_SHORT).show();

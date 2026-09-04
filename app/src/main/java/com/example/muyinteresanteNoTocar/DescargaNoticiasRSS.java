@@ -24,13 +24,23 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 	private Context contexto=null;
 	private iNoticiaRSS objetoReceptor=null;
 	private ProgressDialog pd=null;
+	private boolean mostrarProgreso=true;
 	
 	private static final String MENSAJE_PD="Descargando noticias...";
 	
 	
 	public DescargaNoticiasRSS(Context contexto, iNoticiaRSS objetoReceptor){
+		this(contexto, objetoReceptor, true);
+	}
+
+	/**
+	 * Permite reutilizar el descargador para paginación/infinite scroll sin abrir
+	 * un ProgressDialog modal cada vez que se solicitan noticias antiguas.
+	 */
+	public DescargaNoticiasRSS(Context contexto, iNoticiaRSS objetoReceptor, boolean mostrarProgreso){
 		this.contexto = contexto;
 		this.objetoReceptor = objetoReceptor;
+		this.mostrarProgreso = mostrarProgreso;
 	}
 
 
@@ -43,18 +53,20 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 			ConnectivityAndInternetAccess.beginConnectionAttempt(contexto);
 		}
 		
-		pd = new ProgressDialog(contexto);
-		pd.setMessage(MENSAJE_PD);
-		pd.setCancelable(true);
-		pd.setOnCancelListener(new DialogInterface.OnCancelListener() {
+		if (mostrarProgreso && contexto != null) {
+			pd = new ProgressDialog(contexto);
+			pd.setMessage(MENSAJE_PD);
+			pd.setCancelable(true);
+			pd.setOnCancelListener(new DialogInterface.OnCancelListener() {
+				
+				@Override
+				public void onCancel(DialogInterface dialog) {
+					DescargaNoticiasRSS.this.cancel(true);
+				}
+			});
 			
-			@Override
-			public void onCancel(DialogInterface dialog) {
-				DescargaNoticiasRSS.this.cancel(true);
-			}
-		});
-		
-		pd.show();
+			pd.show();
+		}
 	}
 
 	
@@ -91,7 +103,8 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 			conex.setConnectTimeout(10000);
 			conex.setReadTimeout(10000);
 			conex.setUseCaches(false); // Evitamos la cache de datos.
-			conex.setRequestProperty("accept", "text/xml"); // Indicamos formato a recibir
+			conex.setRequestProperty("accept", "application/rss+xml, application/xml, text/xml, */*");
+			conex.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) practica-noticias-web-muy-interesante/1.0");
 			 
 			 // Abrimos el fichero para su lectura/descarga
 			entrada = conex.getInputStream();	
@@ -121,6 +134,13 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 			e.printStackTrace();
 			return null;
 		}
+		finally {
+			if (entrada != null) {
+				try {
+					entrada.close();
+				} catch (Exception ignored) { }
+			}
+		}
 
 	}
 	
@@ -140,6 +160,8 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 	@Override
 	protected void onProgressUpdate(Integer... values) {
 		super.onProgressUpdate(values);
-		pd.setMessage(MENSAJE_PD + values[0]);
+		if (pd != null && values != null && values.length > 0) {
+			pd.setMessage(MENSAJE_PD + " " + values[0]);
+		}
 	}
 }

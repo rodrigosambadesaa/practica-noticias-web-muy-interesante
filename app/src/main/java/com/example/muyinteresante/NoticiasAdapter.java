@@ -16,7 +16,9 @@ import android.widget.Toast;
 import com.example.muyinteresanteNoTocar.AsignaImagenDeURL;
 import com.example.muyinteresanteNoTocar.NoticiaRSS;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class NoticiasAdapter extends RecyclerView.Adapter<NoticiasAdapter.NoticiaViewHolder> {
 
@@ -24,6 +26,7 @@ public class NoticiasAdapter extends RecyclerView.Adapter<NoticiasAdapter.Notici
     private final List<NoticiaRSS> listaOriginal;
     private final List<NoticiaRSS> listaFiltrada;
     private final OnNoticiaClickListener listener;
+    private String currentQuery = "";
 
     public interface OnNoticiaClickListener {
         void onNoticiaClick(NoticiaRSS noticia);
@@ -41,15 +44,65 @@ public class NoticiasAdapter extends RecyclerView.Adapter<NoticiasAdapter.Notici
         if (nuevaLista != null) {
             this.listaOriginal.addAll(nuevaLista);
         }
-        filter("");
+        filter(currentQuery);
+    }
+
+    /**
+     * Añade noticias nuevas conservando las ya cargadas. Se deduplica por URL y,
+     * como respaldo, por título+fecha para evitar repetir elementos entre páginas RSS.
+     *
+     * @return número de noticias realmente añadidas.
+     */
+    public int appendData(List<NoticiaRSS> nuevasNoticias) {
+        if (nuevasNoticias == null || nuevasNoticias.isEmpty()) {
+            return 0;
+        }
+
+        Set<String> clavesExistentes = new HashSet<>();
+        for (NoticiaRSS noticia : listaOriginal) {
+            clavesExistentes.add(buildKey(noticia));
+        }
+
+        int added = 0;
+        for (NoticiaRSS noticia : nuevasNoticias) {
+            String key = buildKey(noticia);
+            if (!clavesExistentes.contains(key)) {
+                listaOriginal.add(noticia);
+                clavesExistentes.add(key);
+                added++;
+            }
+        }
+
+        if (added > 0) {
+            filter(currentQuery);
+        }
+        return added;
+    }
+
+    public ArrayList<NoticiaRSS> getAllData() {
+        return new ArrayList<>(listaOriginal);
+    }
+
+    private String buildKey(NoticiaRSS noticia) {
+        if (noticia == null) {
+            return "null";
+        }
+        String enlace = noticia.getEnlace();
+        if (enlace != null && !enlace.trim().isEmpty()) {
+            return "url:" + enlace.trim();
+        }
+        String titulo = noticia.getTitulo() != null ? noticia.getTitulo().trim() : "";
+        String fecha = noticia.getStrFecha() != null ? noticia.getStrFecha().trim() : "";
+        return "fallback:" + titulo + "|" + fecha;
     }
 
     public void filter(String query) {
+        currentQuery = query != null ? query : "";
         listaFiltrada.clear();
-        if (query == null || query.trim().isEmpty()) {
+        if (currentQuery.trim().isEmpty()) {
             listaFiltrada.addAll(listaOriginal);
         } else {
-            String lowerQuery = query.toLowerCase().trim();
+            String lowerQuery = currentQuery.toLowerCase().trim();
             for (NoticiaRSS item : listaOriginal) {
                 if ((item.getTitulo() != null && item.getTitulo().toLowerCase().contains(lowerQuery)) ||
                     (item.getDescripcion() != null && item.getDescripcion().toLowerCase().contains(lowerQuery))) {
