@@ -758,7 +758,7 @@ public final class ConnectivityAndInternetAccess {
                 ConnectionAttempt attempt = CONNECTION_ATTEMPT_QUEUE.removeFirst();
                 if (!attempt.closed) {
                     attempt.closed = true;
-                    CONNECTION_ATTEMPTS.updateAndGet(value -> value > 0 ? value - 1 : 0);
+                    decrementConnectionAttemptsLocked();
                     return;
                 }
             }
@@ -1964,7 +1964,8 @@ public final class ConnectivityAndInternetAccess {
     }
 
     private static boolean isUsable(NetworkCapabilities capabilities) {
-        if (capabilities == null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP
+                || capabilities == null
                 || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
             return false;
         }
@@ -2031,7 +2032,8 @@ public final class ConnectivityAndInternetAccess {
     }
 
     private static boolean isFast(NetworkCapabilities capabilities) {
-        return isUsable(capabilities)
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
+                && isUsable(capabilities)
                 && capabilities.getLinkDownstreamBandwidthKbps() >= MINIMUM_FAST_KBPS
                 && capabilities.getLinkUpstreamBandwidthKbps() >= MINIMUM_FAST_KBPS;
     }
@@ -2384,9 +2386,17 @@ public final class ConnectivityAndInternetAccess {
 
             attempt.closed = true;
             CONNECTION_ATTEMPT_QUEUE.remove(attempt);
-            CONNECTION_ATTEMPTS.updateAndGet(value -> value > 0 ? value - 1 : 0);
+            decrementConnectionAttemptsLocked();
             CONNECTION_ATTEMPT_STALLED.set(true);
             return true;
+        }
+    }
+
+    /** Called only while CONNECTION_ATTEMPT_LOCK is held; works on API 16+. */
+    private static void decrementConnectionAttemptsLocked() {
+        int value = CONNECTION_ATTEMPTS.get();
+        if (value > 0) {
+            CONNECTION_ATTEMPTS.set(value - 1);
         }
     }
 
@@ -2409,7 +2419,7 @@ public final class ConnectivityAndInternetAccess {
 
                 attempt.closed = true;
                 CONNECTION_ATTEMPT_QUEUE.removeFirst();
-                CONNECTION_ATTEMPTS.updateAndGet(value -> value > 0 ? value - 1 : 0);
+                decrementConnectionAttemptsLocked();
                 CONNECTION_ATTEMPT_STALLED.set(true);
             }
         }

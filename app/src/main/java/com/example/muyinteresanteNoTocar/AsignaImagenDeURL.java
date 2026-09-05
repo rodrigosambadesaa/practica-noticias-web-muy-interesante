@@ -20,6 +20,7 @@ import android.util.Log;
 import android.widget.ImageView;
 
 import com.example.muyinteresante.util.ConnectivityAndInternetAccess;
+import com.example.muyinteresante.util.RemoteOperationPolicy;
 
 public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 	private static final String TAG = "AsignaImagenDeURL";
@@ -30,6 +31,7 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 	File f;
 	Context contexto;
 	private String currentUrl;
+	private boolean ambiguousNetworkFailure;
 
 	public AsignaImagenDeURL(ImageView img, Context c){
 		this.img = img;
@@ -41,6 +43,7 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 		super.onPreExecute();
 		mapaDeBits = null;
 		f = null;
+		ambiguousNetworkFailure = false;
 		if (contexto != null) {
 			ConnectivityAndInternetAccess.beginConnectionAttempt(contexto);
 		}
@@ -62,7 +65,8 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 					if (mapaDeBits != null) return null;
 				}
 
-				if (contexto != null && !ConnectivityAndInternetAccess.isConnectedOrConnecting(contexto)) {
+				// Guard barato antes de la petición real; no hacemos un sondeo activo previo.
+				if (contexto != null && !ConnectivityAndInternetAccess.isConnected(contexto)) {
 					return null;
 				}
 
@@ -92,6 +96,7 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 			}
 		} catch (Exception e) {
 			Log.e(TAG, "Error cargando imagen de URL: " + currentUrl, e);
+			ambiguousNetworkFailure = RemoteOperationPolicy.isAmbiguousConnectivityFailure(e);
 			mapaDeBits = null;
 		}
 		return null;
@@ -150,6 +155,9 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 				return matcherTwitter.group(1);
 			}
 		} catch (Exception e) {
+			if (RemoteOperationPolicy.isAmbiguousConnectivityFailure(e)) {
+				ambiguousNetworkFailure = true;
+			}
 			Log.w(TAG, "No se pudo extraer og:image de: " + articleUrl, e);
 		}
 		return null;
@@ -183,6 +191,9 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 				break;
 			}
 		} catch (Exception e) {
+			if (RemoteOperationPolicy.isAmbiguousConnectivityFailure(e)) {
+				ambiguousNetworkFailure = true;
+			}
 			Log.e(TAG, "Error descargando bitmap de: " + imageUrl, e);
 		} finally {
 			if (in != null) try { in.close(); } catch (Exception ignored) {}
@@ -206,6 +217,16 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 	protected void onPostExecute(Void result) {
 		super.onPostExecute(result);
 		ConnectivityAndInternetAccess.endConnectionAttempt();
+		if (ambiguousNetworkFailure && contexto != null) {
+			// El diagnóstico solo se ejecuta después del fallo de la petición real.
+			ConnectivityAndInternetAccess.checkInternetAsyncDefault(contexto, generalResult -> {
+				if (generalResult != null && generalResult.isReachable()) {
+					Log.w(TAG, "Internet general disponible, pero la imagen/URL concreta no responde.");
+				} else {
+					Log.w(TAG, "No se pudo demostrar conectividad general al descargar la imagen.");
+				}
+			});
+		}
 		if (img != null) {
 			Object tag = img.getTag();
 			if (mapaDeBits != null && (tag == null || tag.equals(currentUrl))) {

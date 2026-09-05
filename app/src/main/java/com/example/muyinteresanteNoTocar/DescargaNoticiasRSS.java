@@ -1,6 +1,7 @@
 package com.example.muyinteresanteNoTocar;
 
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
@@ -16,6 +17,7 @@ import android.os.AsyncTask;
 import android.util.Log;
 
 import com.example.muyinteresante.util.ConnectivityAndInternetAccess;
+import com.example.muyinteresante.util.RemoteOperationPolicy;
 
 /* Parsea un canal RSS y devuelve sus items en un ArrayList */
 
@@ -25,6 +27,8 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 	private iNoticiaRSS objetoReceptor=null;
 	private ProgressDialog pd=null;
 	private boolean mostrarProgreso=true;
+	private RemoteOperationPolicy.FailureAction failureAction;
+	private Throwable failureCause;
 	
 	private static final String MENSAJE_PD="Descargando noticias...";
 	
@@ -87,11 +91,6 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 		InputStream entrada = null;
 		
 		try{
-			if (contexto != null && !ConnectivityAndInternetAccess.isConnectedOrConnecting(contexto)) {
-				Log.w("DescargaNoticiasRSS", "Descarga cancelada: Dispositivo sin conexión según ConnectivityAndInternetAccess.");
-				return null;
-			}
-
 			DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 			dbf.setIgnoringComments(true);
 			dbf.setCoalescing(true);
@@ -99,14 +98,24 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 			
 			 // Creamos objeto URL a partir de la direccion web para conectarnos con el servidor
 			URL url = new URL(params[0]);
-			URLConnection conex = url.openConnection(); // Abrimos la conexion
+			URLConnection conex = url.openConnection(); // La petición real es la prueba del feed.
 			conex.setConnectTimeout(10000);
 			conex.setReadTimeout(10000);
 			conex.setUseCaches(false); // Evitamos la cache de datos.
 			conex.setRequestProperty("accept", "application/rss+xml, application/xml, text/xml, */*");
 			conex.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) practica-noticias-web-muy-interesante/1.0");
 			 
-			 // Abrimos el fichero para su lectura/descarga
+			if (conex instanceof HttpURLConnection) {
+				int statusCode = ((HttpURLConnection) conex).getResponseCode();
+				if (RemoteOperationPolicy.classifyHttpResponse(statusCode)
+						== RemoteOperationPolicy.FailureAction.FEED_UNAVAILABLE) {
+					failureAction = RemoteOperationPolicy.FailureAction.FEED_UNAVAILABLE;
+					Log.w("DescargaNoticiasRSS", "El feed respondió con HTTP " + statusCode);
+					return null;
+				}
+			}
+
+			// Abrimos el fichero para su lectura/descarga; redirects los gestiona HttpURLConnection.
 			entrada = conex.getInputStream();	
 
 			Document arbolXML =db.parse(entrada);
@@ -131,7 +140,13 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 			return noticias;
 		}
 		catch (Exception e){
-			e.printStackTrace();
+			failureCause = e;
+			if (RemoteOperationPolicy.isAmbiguousConnectivityFailure(e)) {
+				failureAction = RemoteOperationPolicy.FailureAction.CONNECTIVITY_PROBLEM;
+			} else {
+				failureAction = RemoteOperationPolicy.FailureAction.FEED_UNAVAILABLE;
+			}
+			Log.w("DescargaNoticiasRSS", "Error descargando el feed RSS", e);
 			return null;
 		}
 		finally {
@@ -149,11 +164,30 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 	protected void onPostExecute(ArrayList<NoticiaRSS> result) {
 		super.onPostExecute(result);
 		
-		// Finalizamos intento de conexión
+		// Finalizamos el intento de la petición real antes de clasificar un fallo.
 		ConnectivityAndInternetAccess.endConnectionAttempt();
 		
 		if (pd!=null) pd.dismiss();
-		if (objetoReceptor!=null ) objetoReceptor.onRecibeNoticiasRSS(result);
+		if (result != null) {
+			if (objetoReceptor!=null) objetoReceptor.onRecibeNoticiasRSS(result);
+			return;
+		}
+
+		if (failureAction == RemoteOperationPolicy.FailureAction.CONNECTIVITY_PROBLEM
+				&& contexto != null && failureCause != null) {
+			// Solo aquí, después de un fallo ambiguo sin respuesta HTTP válida.
+			ConnectivityAndInternetAccess.checkInternetAsyncDefault(contexto,
+					generalResult -> {
+						RemoteOperationPolicy.FailureAction action =
+								RemoteOperationPolicy.classifyAmbiguousFailure(
+										failureCause,
+										generalResult != null && generalResult.isReachable());
+						if (objetoReceptor != null) objetoReceptor.onFalloNoticiasRSS(action);
+					});
+		} else if (objetoReceptor != null) {
+			objetoReceptor.onFalloNoticiasRSS(
+					failureAction != null ? failureAction : RemoteOperationPolicy.FailureAction.FEED_UNAVAILABLE);
+		}
 	}
 
 

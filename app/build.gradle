@@ -22,8 +22,8 @@ android {
         applicationId "com.example.muyinteresante"
         minSdkVersion 17
         targetSdkVersion 35
-        versionCode 5
-        versionName "1.2.1"
+        versionCode 6
+        versionName "1.2.2"
     }
 
     compileOptions {
@@ -50,4 +50,5 @@ dependencies {
     implementation 'com.android.support:cardview-v7:28.0.0'
     implementation 'com.android.support:design:28.0.0'
     implementation 'com.android.support:support-v4:28.0.0'
+    testImplementation 'junit:junit:4.13.2'
 }
