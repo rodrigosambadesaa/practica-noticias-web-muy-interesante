@@ -22,8 +22,8 @@ android {
         applicationId "com.example.muyinteresante"
         minSdkVersion 17
         targetSdkVersion 35
-        versionCode 6
-        versionName "1.2.2"
+        versionCode 7
+        versionName "1.2.3"
     }
 
     compileOptions {
@@ -35,7 +35,7 @@ android {
         release {
             if (System.getenv('ANDROID_KEYSTORE_PATH')) {
                 signingConfig signingConfigs.release
-            } else {
+            } else if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }) {
                 throw new GradleException('Falta la firma de release: configura ANDROID_KEYSTORE_PATH y las credenciales de la keystore.')
             }
             minifyEnabled false

@@ -1970,9 +1970,19 @@ public final class ConnectivityAndInternetAccess {
             return false;
         }
 
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.P
-                || capabilities.hasCapability(
-                        NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                && !capabilities.hasCapability(
+                        NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED)) {
+            return false;
+        }
+
+        // A VPN may remain advertised with INTERNET while its tunnel has lost
+        // upstream access (notably local-filtering VPNs such as AdGuard). For a
+        // VPN, only Android's passive VALIDATED signal is safe enough to start
+        // an RSS request; the request itself remains the definitive feed test.
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M
+                || !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                || capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
     }
 
     private static boolean hasTransport(Context context, int transport) {

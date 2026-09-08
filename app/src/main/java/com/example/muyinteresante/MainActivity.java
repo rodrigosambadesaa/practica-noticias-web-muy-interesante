@@ -57,6 +57,7 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
     private ConnectivityAndInternetAccess.NetworkState currentNetworkState;
 
     private boolean isLoadingMore = false;
+    private boolean initialLoadStarted = false;
     private boolean hasMoreNews = true;
     private int nextArchivePage = 2;
     private int consecutiveDuplicatePages = 0;
@@ -163,8 +164,6 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
         layoutNetworkStatusPill.setOnClickListener(listenerDiagnostico);
         btnDiagnosticarRed.setOnClickListener(listenerDiagnostico);
 
-        // Cargar noticias iniciales (intenta descargar o usa caché offline)
-        cargarNoticiasIniciales();
     }
 
     @Override
@@ -178,6 +177,10 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
                 actualizarInterfazEstadoRed(state);
             }
         });
+        if (!initialLoadStarted) {
+            initialLoadStarted = true;
+            cargarNoticiasIniciales();
+        }
     }
 
     @Override
@@ -190,22 +193,29 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
     }
 
     private void actualizarInterfazEstadoRed(ConnectivityAndInternetAccess.NetworkState state) {
-        // Comprobaciones avanzadas de red usando los métodos relevantes de ConnectivityAndInternetAccess
-        boolean isConnectedOrConnecting = ConnectivityAndInternetAccess.isConnectedOrConnecting(this);
-        boolean isConnected = ConnectivityAndInternetAccess.isConnected(this);
+        // NetworkState es la única fuente de verdad para el indicador. No usamos
+        // "connecting" como si fuera Internet disponible: una VPN puede seguir
+        // anunciándose mientras su red subyacente ya no tiene salida.
+        boolean isConnected = state != null
+                ? state.isConnected()
+                : ConnectivityAndInternetAccess.isConnected(this);
         boolean isWifi = ConnectivityAndInternetAccess.isConnectedWifi(this);
         boolean isMobile = ConnectivityAndInternetAccess.isConnectedMobile(this);
         boolean isVpn = ConnectivityAndInternetAccess.vpnActive(this);
         boolean isAirplane = ConnectivityAndInternetAccess.isAirplaneModeOn(this);
         boolean isFast = ConnectivityAndInternetAccess.isConnectedFast(this);
-        boolean isCaptive = ConnectivityAndInternetAccess.isCaptivePortalDetected(this);
-        boolean isValidated = ConnectivityAndInternetAccess.isInternetValidated(this);
+        boolean isCaptive = state != null
+                ? state.isCaptivePortalDetected()
+                : ConnectivityAndInternetAccess.isCaptivePortalDetected(this);
+        boolean isValidated = state != null
+                ? state.isInternetValidated()
+                : ConnectivityAndInternetAccess.isInternetValidated(this);
 
-        Log.d(TAG, "Chequeo de red: ConnectedOrConnecting=" + isConnectedOrConnecting +
-                ", Connected=" + isConnected + ", Wifi=" + isWifi + ", Mobile=" + isMobile +
+        Log.d(TAG, "Chequeo de red: Connected=" + isConnected +
+                ", Wifi=" + isWifi + ", Mobile=" + isMobile +
                 ", VPN=" + isVpn + ", Airplane=" + isAirplane + ", Fast=" + isFast);
 
-        if (!isConnectedOrConnecting && !isConnected) {
+        if (!isConnected) {
             // Disconnected / Offline
             viewNetworkDot.setBackgroundResource(R.color.status_offline);
             tvNetworkStatusText.setText(isAirplane ? "Modo Avión" : "Sin red");
@@ -225,7 +235,7 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
             bannerNetworkNotice.setVisibility(View.VISIBLE);
             bannerNetworkNotice.setBackgroundResource(R.color.status_warning_bg);
             tvBannerText.setText("Se requiere inicio de sesión en red (Portal Cautivo detectado).");
-        } else if (!isValidated && !isConnected) {
+        } else if (!isValidated && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             // Connected without validated internet
             viewNetworkDot.setBackgroundResource(R.color.status_warning);
             tvNetworkStatusText.setText("Conectando...");
@@ -269,8 +279,8 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
     private void ejecutarDescargarNoticias() {
         // Un único guard barato; la petición RSS real será la prueba definitiva del feed.
         if (!ConnectivityAndInternetAccess.isConnected(this)) {
-            Toast.makeText(this, "Sin conexión disponible para iniciar la descarga.", Toast.LENGTH_SHORT).show();
-            usarNoticiasOffline();
+            swipeRefreshLayout.setRefreshing(false);
+            usarNoticiasOffline(false);
             return;
         }
 
@@ -290,6 +300,7 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
 
         if (!ConnectivityAndInternetAccess.isConnected(this)) {
             Log.d(TAG, "No se cargan más noticias: sin conexión disponible.");
+            isLoadingMore = false;
             Toast.makeText(this, "Sin conexión. Se conservan las noticias guardadas.", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -356,12 +367,18 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
     }
 
     private void usarNoticiasOffline() {
+        usarNoticiasOffline(true);
+    }
+
+    private void usarNoticiasOffline(boolean notify) {
         ArrayList<NoticiaRSS> cached = NewsCacheManager.loadNewsFromCache(this);
         if (cached != null && !cached.isEmpty()) {
             adapter.updateData(cached);
             layoutEmptyState.setVisibility(View.GONE);
             rvNoticias.setVisibility(View.VISIBLE);
-            Toast.makeText(this, "Mostrando noticias guardadas en modo offline", Toast.LENGTH_SHORT).show();
+            if (notify) {
+                Toast.makeText(this, "Mostrando noticias guardadas en modo offline", Toast.LENGTH_SHORT).show();
+            }
         } else {
             rvNoticias.setVisibility(View.GONE);
             layoutEmptyState.setVisibility(View.VISIBLE);
@@ -387,7 +404,7 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
             Log.d(TAG, "Noticias recibidas con éxito: " + listaNoticias.size());
         } else {
             Toast.makeText(this, "No se pudieron obtener nuevas noticias del canal RSS", Toast.LENGTH_SHORT).show();
-            usarNoticiasOffline();
+            usarNoticiasOffline(false);
         }
     }
 
@@ -399,7 +416,7 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
                 : "Problema de conectividad. Mostrando la caché."
                 ;
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
-        usarNoticiasOffline();
+        usarNoticiasOffline(false);
     }
 
     private void ejecutarDiagnosticoRedCompleto() {
@@ -410,8 +427,9 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
                 .show();
 
         // Chequeos estáticos rápidos de ConnectivityAndInternetAccess
-        boolean isConnectedOrConnecting = ConnectivityAndInternetAccess.isConnectedOrConnecting(this);
-        boolean isConnected = ConnectivityAndInternetAccess.isConnected(this);
+        boolean isConnected = currentNetworkState != null
+                ? currentNetworkState.isConnected()
+                : ConnectivityAndInternetAccess.isConnected(this);
         boolean isWifi = ConnectivityAndInternetAccess.isConnectedWifi(this);
         boolean isMobile = ConnectivityAndInternetAccess.isConnectedMobile(this);
         boolean isFast = ConnectivityAndInternetAccess.isConnectedFast(this);
@@ -429,7 +447,7 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
 
                     StringBuilder sb = new StringBuilder();
                     sb.append("📡 ESTADO DE INTERFAZ DE RED:\n");
-                    sb.append("• Estado general: ").append(isConnected ? "Conectado" : (isConnectedOrConnecting ? "Conectando..." : "Desconectado")).append("\n");
+                    sb.append("• Estado general: ").append(isConnected ? "Conectado" : "Desconectado").append("\n");
                     sb.append("• Tipo de red: ").append(isWifi ? "Wi-Fi" : (isMobile ? "Móvil / Celular" : "Otra / Ninguna")).append("\n");
                     sb.append("• Velocidad estimada: ").append(isFast ? "Rápida (High Speed)" : "Lenta / Desconocida").append("\n");
                     sb.append("• Red VPN Activa: ").append(isVpn ? "SÍ" : "No").append("\n");

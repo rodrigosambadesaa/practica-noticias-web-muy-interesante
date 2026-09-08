@@ -44,9 +44,6 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 		mapaDeBits = null;
 		f = null;
 		ambiguousNetworkFailure = false;
-		if (contexto != null) {
-			ConnectivityAndInternetAccess.beginConnectionAttempt(contexto);
-		}
 	}
 
 	@Override
@@ -216,7 +213,6 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 	@Override
 	protected void onPostExecute(Void result) {
 		super.onPostExecute(result);
-		ConnectivityAndInternetAccess.endConnectionAttempt();
 		if (ambiguousNetworkFailure && contexto != null) {
 			// El diagnóstico solo se ejecuta después del fallo de la petición real.
 			ConnectivityAndInternetAccess.checkInternetAsyncDefault(contexto, generalResult -> {
@@ -238,7 +234,6 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 	@Override
 	protected void onCancelled() {
 		super.onCancelled();
-		ConnectivityAndInternetAccess.endConnectionAttempt();
 		if (f != null && f.exists()) {
 			try { f.delete(); } catch(Exception ex){} 
 		}

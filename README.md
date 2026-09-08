@@ -10,6 +10,11 @@ Aplicación Android que carga el feed RSS de Muy Interesante y conserva las noti
 - Con red utilizable se ejecuta directamente la petición RSS real. Esa petición gestiona redirects, timeouts, códigos HTTP y excepciones.
 - Un código HTTP válido no dispara un diagnóstico adicional. Solo un fallo ambiguo sin respuesta HTTP válida ejecuta `checkInternetAsyncDefault(...)` para distinguir entre feed caído y problema general de Internet.
 - Las imágenes también usan la caché y el mismo guard barato, sin sondeo activo previo.
+- Una VPN sin salida validada (por ejemplo, un filtro local como AdGuard cuando no
+  tiene red subyacente) no se trata como Internet disponible: no se inicia el RSS,
+  se detienen los indicadores de carga y se mantiene la caché/offline.
+- El indicador y el diagnóstico usan el `NetworkState` pasivo del observador; el
+  estado transitorio “conectando” no se muestra como conectado.
 
 ## Verificación
 
