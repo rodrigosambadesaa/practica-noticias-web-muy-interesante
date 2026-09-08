@@ -63,7 +63,8 @@ public class AsignaImagenDeURL extends AsyncTask<String,Void,Void> {
 				}
 
 				// Guard barato antes de la petición real; no hacemos un sondeo activo previo.
-				if (contexto != null && !ConnectivityAndInternetAccess.isConnected(contexto)) {
+				if (contexto != null && (!ConnectivityAndInternetAccess.isConnected(contexto)
+						|| !ConnectivityAndInternetAccess.hasPhysicalNetwork(contexto))) {
 					return null;
 				}
 

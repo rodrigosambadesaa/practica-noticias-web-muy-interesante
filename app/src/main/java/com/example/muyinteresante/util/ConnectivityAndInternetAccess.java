@@ -816,6 +816,32 @@ public final class ConnectivityAndInternetAccess {
         return connected;
     }
 
+    /**
+     * Cheap passive guard that ignores a dangling VPN-only default network.
+     * A VPN capability can remain present after its underlying Wi-Fi/mobile
+     * transport disappeared, so it must not make the app appear connected.
+     */
+    public static boolean hasPhysicalNetwork(Context context) {
+        requireContext(context);
+        ConnectivityManager connectivityManager = manager(context);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            for (Network network : connectivityManager.getAllNetworks()) {
+                NetworkCapabilities capabilities =
+                        connectivityManager.getNetworkCapabilities(network);
+                if (isUsable(capabilities)
+                        && (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                        || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                        || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        return isConnectedLegacy(connectivityManager.getActiveNetworkInfo());
+    }
+
     /** Returns a cheap point-in-time snapshot of the application's default network. */
     public static NetworkState snapshotNetworkState(Context context) {
         requireContext(context);
@@ -1964,25 +1990,14 @@ public final class ConnectivityAndInternetAccess {
     }
 
     private static boolean isUsable(NetworkCapabilities capabilities) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP
-                || capabilities == null
+        if (capabilities == null
                 || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
             return false;
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-                && !capabilities.hasCapability(
-                        NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED)) {
-            return false;
-        }
-
-        // A VPN may remain advertised with INTERNET while its tunnel has lost
-        // upstream access (notably local-filtering VPNs such as AdGuard). For a
-        // VPN, only Android's passive VALIDATED signal is safe enough to start
-        // an RSS request; the request itself remains the definitive feed test.
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-                || !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-                || capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.P
+                || capabilities.hasCapability(
+                        NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED);
     }
 
     private static boolean hasTransport(Context context, int transport) {
@@ -2042,8 +2057,7 @@ public final class ConnectivityAndInternetAccess {
     }
 
     private static boolean isFast(NetworkCapabilities capabilities) {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
-                && isUsable(capabilities)
+        return isUsable(capabilities)
                 && capabilities.getLinkDownstreamBandwidthKbps() >= MINIMUM_FAST_KBPS
                 && capabilities.getLinkUpstreamBandwidthKbps() >= MINIMUM_FAST_KBPS;
     }
@@ -2402,14 +2416,6 @@ public final class ConnectivityAndInternetAccess {
         }
     }
 
-    /** Called only while CONNECTION_ATTEMPT_LOCK is held; works on API 16+. */
-    private static void decrementConnectionAttemptsLocked() {
-        int value = CONNECTION_ATTEMPTS.get();
-        if (value > 0) {
-            CONNECTION_ATTEMPTS.set(value - 1);
-        }
-    }
-
     private static void expireTimedOutConnectionAttempts() {
         long now = SystemClock.elapsedRealtime();
 
@@ -2432,6 +2438,14 @@ public final class ConnectivityAndInternetAccess {
                 decrementConnectionAttemptsLocked();
                 CONNECTION_ATTEMPT_STALLED.set(true);
             }
+        }
+    }
+
+    /** Called only while CONNECTION_ATTEMPT_LOCK is held; works on API 16+. */
+    private static void decrementConnectionAttemptsLocked() {
+        int value = CONNECTION_ATTEMPTS.get();
+        if (value > 0) {
+            CONNECTION_ATTEMPTS.set(value - 1);
         }
     }
 
@@ -2592,4 +2606,3 @@ public final class ConnectivityAndInternetAccess {
         }
     }
 }
-

@@ -20,6 +20,18 @@ public class RemoteOperationPolicyTest {
     }
 
     @Test
+    public void vpnOnlyNetworkUsesOfflineWithoutStartingRequest() {
+        assertEquals(RemoteOperationPolicy.PreflightDecision.USE_OFFLINE,
+                RemoteOperationPolicy.beforeRemoteOperation(true, false));
+    }
+
+    @Test
+    public void physicalNetworkWithConnectedVpnAllowsRealRequest() {
+        assertEquals(RemoteOperationPolicy.PreflightDecision.LOAD_REMOTE,
+                RemoteOperationPolicy.beforeRemoteOperation(true, true));
+    }
+
+    @Test
     public void successfulHttpResponseIsDefinitive() {
         assertEquals(RemoteOperationPolicy.FailureAction.USE_HTTP_RESULT,
                 RemoteOperationPolicy.classifyHttpResponse(200));

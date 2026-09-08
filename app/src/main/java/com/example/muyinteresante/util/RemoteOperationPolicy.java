@@ -17,6 +17,11 @@ public final class RemoteOperationPolicy {
         return usableNetwork ? PreflightDecision.LOAD_REMOTE : PreflightDecision.USE_OFFLINE;
     }
 
+    public static PreflightDecision beforeRemoteOperation(
+            boolean connected, boolean physicalNetwork) {
+        return beforeRemoteOperation(connected && physicalNetwork);
+    }
+
     /** A valid HTTP response proves communication and must never trigger a generic probe. */
     public static FailureAction classifyHttpResponse(int statusCode) {
         return statusCode >= 200 && statusCode < 400

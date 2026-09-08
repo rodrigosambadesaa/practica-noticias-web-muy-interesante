@@ -53,6 +53,14 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 		super.onPreExecute();
 		
 		if (contexto != null) {
+			if (RemoteOperationPolicy.beforeRemoteOperation(
+					ConnectivityAndInternetAccess.isConnected(contexto)
+							&& ConnectivityAndInternetAccess.hasPhysicalNetwork(contexto))
+					== RemoteOperationPolicy.PreflightDecision.USE_OFFLINE) {
+				failureAction = RemoteOperationPolicy.FailureAction.CONNECTIVITY_PROBLEM;
+				return;
+			}
+
 			// Registramos inicio de intento de conexión para seguimiento de estado
 			ConnectivityAndInternetAccess.beginConnectionAttempt(contexto);
 		}
@@ -91,6 +99,14 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 		InputStream entrada = null;
 		
 		try{
+			if (contexto != null && RemoteOperationPolicy.beforeRemoteOperation(
+					ConnectivityAndInternetAccess.isConnected(contexto)
+							&& ConnectivityAndInternetAccess.hasPhysicalNetwork(contexto))
+					== RemoteOperationPolicy.PreflightDecision.USE_OFFLINE) {
+				failureAction = RemoteOperationPolicy.FailureAction.CONNECTIVITY_PROBLEM;
+				return null;
+			}
+
 			DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 			dbf.setIgnoringComments(true);
 			dbf.setCoalescing(true);

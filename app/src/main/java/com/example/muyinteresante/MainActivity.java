@@ -196,14 +196,15 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
         // NetworkState es la única fuente de verdad para el indicador. No usamos
         // "connecting" como si fuera Internet disponible: una VPN puede seguir
         // anunciándose mientras su red subyacente ya no tiene salida.
-        boolean isConnected = state != null
+        boolean hasPhysicalNetwork = ConnectivityAndInternetAccess.hasPhysicalNetwork(this);
+        boolean isConnected = (state != null
                 ? state.isConnected()
-                : ConnectivityAndInternetAccess.isConnected(this);
-        boolean isWifi = ConnectivityAndInternetAccess.isConnectedWifi(this);
-        boolean isMobile = ConnectivityAndInternetAccess.isConnectedMobile(this);
+                : ConnectivityAndInternetAccess.isConnected(this)) && hasPhysicalNetwork;
+        boolean isWifi = hasPhysicalNetwork && ConnectivityAndInternetAccess.isConnectedWifi(this);
+        boolean isMobile = hasPhysicalNetwork && ConnectivityAndInternetAccess.isConnectedMobile(this);
         boolean isVpn = ConnectivityAndInternetAccess.vpnActive(this);
         boolean isAirplane = ConnectivityAndInternetAccess.isAirplaneModeOn(this);
-        boolean isFast = ConnectivityAndInternetAccess.isConnectedFast(this);
+        boolean isFast = hasPhysicalNetwork && ConnectivityAndInternetAccess.isConnectedFast(this);
         boolean isCaptive = state != null
                 ? state.isCaptivePortalDetected()
                 : ConnectivityAndInternetAccess.isCaptivePortalDetected(this);
@@ -212,6 +213,7 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
                 : ConnectivityAndInternetAccess.isInternetValidated(this);
 
         Log.d(TAG, "Chequeo de red: Connected=" + isConnected +
+                ", Physical=" + hasPhysicalNetwork +
                 ", Wifi=" + isWifi + ", Mobile=" + isMobile +
                 ", VPN=" + isVpn + ", Airplane=" + isAirplane + ", Fast=" + isFast);
 
@@ -278,7 +280,7 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
 
     private void ejecutarDescargarNoticias() {
         // Un único guard barato; la petición RSS real será la prueba definitiva del feed.
-        if (!ConnectivityAndInternetAccess.isConnected(this)) {
+        if (!canStartRemoteRequest()) {
             swipeRefreshLayout.setRefreshing(false);
             usarNoticiasOffline(false);
             return;
@@ -298,7 +300,7 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
             return;
         }
 
-        if (!ConnectivityAndInternetAccess.isConnected(this)) {
+        if (!canStartRemoteRequest()) {
             Log.d(TAG, "No se cargan más noticias: sin conexión disponible.");
             isLoadingMore = false;
             Toast.makeText(this, "Sin conexión. Se conservan las noticias guardadas.", Toast.LENGTH_SHORT).show();
@@ -370,6 +372,11 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
         usarNoticiasOffline(true);
     }
 
+    private boolean canStartRemoteRequest() {
+        return ConnectivityAndInternetAccess.isConnected(this)
+                && ConnectivityAndInternetAccess.hasPhysicalNetwork(this);
+    }
+
     private void usarNoticiasOffline(boolean notify) {
         ArrayList<NoticiaRSS> cached = NewsCacheManager.loadNewsFromCache(this);
         if (cached != null && !cached.isEmpty()) {
@@ -427,9 +434,10 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
                 .show();
 
         // Chequeos estáticos rápidos de ConnectivityAndInternetAccess
-        boolean isConnected = currentNetworkState != null
+        boolean isConnected = (currentNetworkState != null
                 ? currentNetworkState.isConnected()
-                : ConnectivityAndInternetAccess.isConnected(this);
+                : ConnectivityAndInternetAccess.isConnected(this))
+                && ConnectivityAndInternetAccess.hasPhysicalNetwork(this);
         boolean isWifi = ConnectivityAndInternetAccess.isConnectedWifi(this);
         boolean isMobile = ConnectivityAndInternetAccess.isConnectedMobile(this);
         boolean isFast = ConnectivityAndInternetAccess.isConnectedFast(this);
