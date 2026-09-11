@@ -1,6 +1,7 @@
 package com.example.muyinteresante;
 
 import android.content.Intent;
+import android.annotation.TargetApi;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
@@ -20,6 +21,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+
+import com.example.muyinteresante.util.ConnectivityAndInternetAccess;
 
 public class DetalleActivity extends AppCompatActivity {
 
@@ -101,17 +104,45 @@ public class DetalleActivity extends AppCompatActivity {
             }
 
             @Override
+            @TargetApi(21)
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
+                if (request != null && request.isForMainFrame()) {
+                    Toast.makeText(DetalleActivity.this,
+                            ConnectivityAndInternetAccess.isConnected(DetalleActivity.this)
+                                    ? "El servicio no está disponible ahora."
+                                    : "Sin conexión de red.",
+                            Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            @TargetApi(21)
+            public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                                            android.webkit.WebResourceResponse errorResponse) {
+                super.onReceivedHttpError(view, request, errorResponse);
+                if (request != null && request.isForMainFrame()
+                        && errorResponse != null && errorResponse.getStatusCode() >= 500) {
+                    Toast.makeText(DetalleActivity.this,
+                            "El servicio no está disponible ahora.", Toast.LENGTH_SHORT).show();
+                }
             }
         });
 
         if (articleUrl != null && !articleUrl.isEmpty()) {
-            webView.loadUrl(articleUrl);
+            cargarArticuloSiHayRed();
         } else {
             Toast.makeText(this, "URL no válida", Toast.LENGTH_SHORT).show();
             finish();
         }
+    }
+
+    private void cargarArticuloSiHayRed() {
+        if (!ConnectivityAndInternetAccess.isConnected(this)) {
+            Toast.makeText(this, "Sin conexión de red.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        webView.loadUrl(articleUrl);
     }
 
     @Override
@@ -129,7 +160,7 @@ public class DetalleActivity extends AppCompatActivity {
             return true;
         } else if (id == R.id.menu_actualizar) {
             if (webView != null) {
-                webView.reload();
+                cargarArticuloSiHayRed();
             }
             return true;
         } else if (id == R.id.action_abrir_navegador || id == R.id.action_test_conectividad) {
