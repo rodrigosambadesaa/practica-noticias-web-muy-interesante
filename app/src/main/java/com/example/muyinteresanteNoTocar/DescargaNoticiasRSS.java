@@ -115,8 +115,8 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 			 // Creamos objeto URL a partir de la direccion web para conectarnos con el servidor
 			URL url = new URL(params[0]);
 			URLConnection conex = url.openConnection(); // La petición real es la prueba del feed.
-			conex.setConnectTimeout(10000);
-			conex.setReadTimeout(10000);
+			conex.setConnectTimeout(15000);
+			conex.setReadTimeout(30000);
 			conex.setUseCaches(false); // Evitamos la cache de datos.
 			conex.setRequestProperty("accept", "application/rss+xml, application/xml, text/xml, */*");
 			conex.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) practica-noticias-web-muy-interesante/1.0");
