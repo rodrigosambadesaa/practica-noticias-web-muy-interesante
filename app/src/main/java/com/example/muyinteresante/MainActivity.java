@@ -2,16 +2,16 @@ package com.example.muyinteresante;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.support.v4.view.OnApplyWindowInsetsListener;
-import android.support.v4.view.ViewCompat;
-import android.support.v4.view.WindowInsetsCompat;
-import android.support.v4.widget.SwipeRefreshLayout;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
-import android.support.v7.widget.SearchView;
-import android.support.v7.widget.Toolbar;
+import androidx.core.view.OnApplyWindowInsetsListener;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.appcompat.widget.SearchView;
+import androidx.appcompat.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -486,6 +486,31 @@ public class MainActivity extends AppCompatActivity implements iNoticiaRSS {
             SearchView searchView = (SearchView) searchItem.getActionView();
             if (searchView != null) {
                 searchView.setQueryHint("Buscar noticia...");
+                searchView.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+                searchItem.setOnActionExpandListener(new MenuItem.OnActionExpandListener() {
+                    @Override public boolean onMenuItemActionExpand(MenuItem item) {
+                        searchView.post(new Runnable() {
+                            @Override public void run() {
+                                searchView.setIconified(false);
+                                searchView.requestFocus();
+                                android.view.inputmethod.InputMethodManager ime =
+                                        (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                                if (ime != null) {
+                                    View focused = searchView.findFocus();
+                                    ime.showSoftInput(focused != null ? focused : searchView,
+                                            android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                                }
+                            }
+                        });
+                        return true;
+                    }
+                    @Override public boolean onMenuItemActionCollapse(MenuItem item) {
+                        searchView.setQuery("", false);
+                        if (adapter != null) adapter.filter("");
+                        return true;
+                    }
+                });
+                
                 searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
                     @Override
                     public boolean onQueryTextSubmit(String query) {
