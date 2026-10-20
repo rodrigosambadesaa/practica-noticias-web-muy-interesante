@@ -178,7 +178,7 @@ public class DescargaNoticiasRSS extends AsyncTask<String,Integer,ArrayList<Noti
 		if (failureAction == RemoteOperationPolicy.FailureAction.CONNECTIVITY_PROBLEM
 				&& contexto != null && failureCause != null) {
 			// Solo aquí, después de un fallo ambiguo sin respuesta HTTP válida.
-			ConnectivityAndInternetAccess.checkInternetAsyncDefault(contexto,
+			ConnectivityAndInternetAccess.checkHttpOnlyAsyncDefault(contexto,
 					generalResult -> {
 						RemoteOperationPolicy.FailureAction action =
 								RemoteOperationPolicy.classifyAmbiguousFailure(

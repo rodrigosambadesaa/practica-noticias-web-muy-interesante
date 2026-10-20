@@ -51,12 +51,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > release-notes.md <<'EOF'
-          - 🚀 Rendimiento: Optimizada la memoria RAM durante la descarga mediante la lectura de flujo del XML (XmlPullParser).
-          - 🔄 Fluidez: Lectura y escritura de la caché local movidas a hilos secundarios; la app ahora arranca sin esperar al disco.
-          - 📱 UI Moderna: Añadido soporte real para rotaciones de pantalla gracias a ViewModel.
-          - 🌍 Internacionalización: Textos visibles extraídos al archivo de recursos para facilitar futuras traducciones.
-          - 🔐 Firma de distribución con las credenciales protegidas del repositorio.
+          - 🌐 Distingue fallos del RSS y fallos generales HTTPS tras errores ambiguos, sin confundir DNS/TCP con HTTP.
+          - ⚙️ Limita a dos diagnósticos activos y utiliza un pool compartido de ocho sondas.
+          - 📡 Sin prechecks HTTP redundantes antes de descargas; conserva diagnóstico manual multicapa.
+          - 🔐 Conserva la firma de distribución del repositorio mediante los secretos protegidos.
           EOF
-          gh release create v1.3.0 app/build/outputs/apk/release/app-release.apk \
+          gh release create v1.3.1 app/build/outputs/apk/release/app-release.apk \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "v1.3.0 — Caché asíncrona, XmlPullParser y ViewModel" --notes-file release-notes.md
+            --title "v1.3.1 — Diagnóstico HTTP y concurrencia de red" --notes-file release-notes.md
