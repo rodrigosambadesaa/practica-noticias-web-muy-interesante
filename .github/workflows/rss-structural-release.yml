@@ -51,11 +51,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > release-notes.md <<'EOF'
-          - 🌐 Distingue fallos del RSS y fallos generales HTTPS tras errores ambiguos, sin confundir DNS/TCP con HTTP.
-          - ⚙️ Limita a dos diagnósticos activos y utiliza un pool compartido de ocho sondas.
-          - 📡 Sin prechecks HTTP redundantes antes de descargas; conserva diagnóstico manual multicapa.
-          - 🔐 Conserva la firma de distribución del repositorio mediante los secretos protegidos.
+          - 🔤 Corrige entidades HTML visibles en titulares: &#039;, &quot;, &amp;, &aacute;, &euro; y Unicode.
+          - 📰 Normaliza títulos RSS y de la caché para presentación, búsqueda y compartición.
+          - 🧪 Pruebas JVM de entidades simples, doblemente escapadas e inválidas.
+          - 🛡️ Mantiene los datos como texto plano sin cambiar las URL.
+          - 🔐 Conserva la firma de distribución del repositorio con los secretos protegidos.
           EOF
-          gh release create v1.3.1 app/build/outputs/apk/release/app-release.apk \
+          gh release create v1.3.2 app/build/outputs/apk/release/app-release.apk \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "v1.3.1 — Diagnóstico HTTP y concurrencia de red" --notes-file release-notes.md
+            --title "v1.3.2 — Corrección de entidades HTML en noticias" --notes-file release-notes.md
