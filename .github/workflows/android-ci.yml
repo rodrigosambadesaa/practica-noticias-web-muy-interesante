@@ -7,6 +7,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# CVE-2026-114938: disable vulnerable intrinsic in build JVM.
+env:
+  JAVA_TOOL_OPTIONS: -XX:-UseBASE64Intrinsics
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
