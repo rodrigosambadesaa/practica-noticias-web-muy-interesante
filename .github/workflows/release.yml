@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+# CVE-2026-114938: protect Java build/release tooling.
+env:
+  JAVA_TOOL_OPTIONS: -XX:-UseBASE64Intrinsics
+
 jobs:
   release:
     runs-on: ubuntu-latest
