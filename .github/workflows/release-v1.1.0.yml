@@ -58,6 +58,10 @@ jobs:
           - Actualización de versión a 1.1.0 (versionCode 2).
           EOF
 
+          if gh release view "v1.1.0" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::notice::Release v1.1.0 already exists; preserving its tag and signed APK."
+            exit 0
+          fi
           gh release create v1.1.0 practica-noticias-v1.1.0.apk \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \

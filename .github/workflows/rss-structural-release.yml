@@ -61,6 +61,10 @@ jobs:
           - 🛡️ Mantiene los datos como texto plano sin cambiar las URL.
           - 🔐 Conserva la firma de distribución del repositorio con los secretos protegidos.
           EOF
+          if gh release view "v1.3.2" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::notice::Release v1.3.2 already exists; preserving its tag and signed APK."
+            exit 0
+          fi
           gh release create v1.3.2 app/build/outputs/apk/release/app-release.apk \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "v1.3.2 — Corrección de entidades HTML en noticias" --notes-file release-notes.md

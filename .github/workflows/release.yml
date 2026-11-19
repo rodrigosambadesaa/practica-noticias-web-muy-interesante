@@ -52,5 +52,9 @@ jobs:
         run: |
           tag="${GITHUB_REF_NAME}"
           if [[ "$tag" == "master" || "$tag" == "" ]]; then tag="android-${GITHUB_SHA::7}"; fi
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "$tag" --generate-notes
-          gh release upload "$tag" app/build/outputs/apk/release/app-release.apk --clobber
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::notice::Release $tag already exists; leaving signed APK unchanged."
+            exit 0
+          fi
+          gh release create "$tag" app/build/outputs/apk/release/app-release.apk \
+            --repo "$GITHUB_REPOSITORY" --title "$tag" --generate-notes
