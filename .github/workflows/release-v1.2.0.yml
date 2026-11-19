@@ -29,16 +29,51 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      - name: Check immutable historical v1.2.0 release
+        id: release_state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.2.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::v1.2.0 already published: preserving the original signed artifact."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Make Gradle wrapper executable
+        if: steps.release_state.outputs.exists != 'true'
         run: chmod +x gradlew
 
+      - name: Verify source version matches historical tag
+        if: steps.release_state.outputs.exists != 'true'
+        run: |
+          grep -Eq 'versionName[[:space:]]+"1\.2\.0"' app/build.gradle
+
+      - name: Prepare verified Android release keystore
+        if: steps.release_state.outputs.exists != 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_B64" || { echo "::error::Missing ANDROID_KEYSTORE_BASE64; never publish unsigned APK."; exit 1; }
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          chmod 600 "$RUNNER_TEMP/release.keystore"
+
       - name: Build release APK
+        if: steps.release_state.outputs.exists != 'true'
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew --no-daemon clean assembleRelease
 
       - name: Prepare release asset
+        if: steps.release_state.outputs.exists != 'true'
         run: cp app/build/outputs/apk/release/app-release.apk noticias-muy-interesante-v1.2.0.apk
 
       - name: Update GitHub release
+        if: steps.release_state.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
