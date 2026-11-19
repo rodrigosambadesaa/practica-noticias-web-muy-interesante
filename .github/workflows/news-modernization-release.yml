@@ -21,7 +21,20 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+      - name: Check immutable historical v1.2.9 release
+        id: release_state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.2.9 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::v1.2.9 already published: preserving the original signed artifact."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Validate AndroidX, Glide and permissions
+        if: steps.release_state.outputs.exists != 'true'
         run: |
           grep -q "versionName \"1.2.9\"" app/build.gradle
           grep -q 'androidx.appcompat.widget.SearchView' app/src/main/res/menu/main.xml
@@ -30,10 +43,12 @@ jobs:
           test ! -e app/src/main/java/com/example/muyinteresanteNoTocar/AsignaImagenDeURL.java
           ! grep -q 'android.permission.WRITE_EXTERNAL_STORAGE' app/src/main/AndroidManifest.xml
       - name: Test and assemble debug
+        if: steps.release_state.outputs.exists != 'true'
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
       - name: Prepare production signing keystore
+        if: steps.release_state.outputs.exists != 'true'
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -41,6 +56,7 @@ jobs:
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
           chmod 600 "$RUNNER_TEMP/release.keystore"
       - name: Build signed release APK
+        if: steps.release_state.outputs.exists != 'true'
         env:
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -50,6 +66,7 @@ jobs:
           ./gradlew --no-daemon :app:assembleRelease
           test -s app/build/outputs/apk/release/app-release.apk
       - name: Publish GitHub Release v1.2.9
+        if: steps.release_state.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
