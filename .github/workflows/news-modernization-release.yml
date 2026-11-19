@@ -61,6 +61,10 @@ jobs:
           - Fecha formateada y descripción saneada precalculadas; eliminada la caché externa innecesaria y el permiso WRITE_EXTERNAL_STORAGE.
           - Firma de distribución con el almacén de claves del proyecto configurado en GitHub Actions.
           EOF
+          if gh release view "v1.2.9" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::notice::Release v1.2.9 already exists; preserving its tag and signed APK."
+            exit 0
+          fi
           gh release create v1.2.9 app/build/outputs/apk/release/app-release.apk \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "v1.2.9 — AndroidX, Glide y buscador funcional" --notes-file release-notes.md
